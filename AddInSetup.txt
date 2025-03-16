@@ -1,0 +1,2 @@
+//Add into users table :D 
+`connected` int(1) unsigned DEFAULT '0',
