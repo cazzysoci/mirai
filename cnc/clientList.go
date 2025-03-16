@@ -4,6 +4,7 @@ import (
     "time"
     "math/rand"
     "sync"
+    "fmt"
 )
 
 type AttackSend struct {
@@ -50,10 +51,13 @@ func (this *ClientList) Distribution() map[string]int {
 
 func (this *ClientList) AddClient(c *Bot) {
     this.addQueue <- c
+    fmt.Printf("\x1b[1;31m[\x1b[1;32m!\x1b[1;31m] \x1b[1;31m[%s\x1b[1;31m] [\x1b[1;37m%s\x1b[1;31m] [\x1b[1;32mBot Connected\x1b[1;31m]\n", c.conn.RemoteAddr(), c.source)
 }
 
 func (this *ClientList) DelClient(c *Bot) {
     this.delQueue <- c
+    //fmt.Printf("\x1b[1;37m[\x1b[1;90m!\x1b[1;37m] \x1b[1;31m[%s\x1b[1;31m] [\x1b[1;37m%s\x1b[1;31m] [\x1b[1;90mBot Left\x1b[1;31m]\n", c.conn.RemoteAddr(), c.source)
+
 }
 
 func (this *ClientList) QueueBuf(buf []byte, maxbots int, botCata string) {

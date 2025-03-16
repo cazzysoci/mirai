@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <arpa/inet.h>
 
-static uint32_t table_key = 0x1337c0d3;
+static uint32_t table_key = 0xdeaddaad;
 
 void *x(void *, int);
 

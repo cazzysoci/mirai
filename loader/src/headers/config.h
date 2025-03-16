@@ -1,6 +1,6 @@
 #pragma once
 
-#define HTTP_SERVER "0.0.0.0" //Change this too your SERVER IP
+#define HTTP_SERVER "157.90.250.90"
 #define HTTP_PORT 80
 
-#define TFTP_SERVER "0.0.0.0" //Change this too your SERVER IP
+#define TFTP_SERVER "157.90.250.90"

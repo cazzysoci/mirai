@@ -4,12 +4,9 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <time.h>
-#include <string.h>
 
 #include "includes.h"
 #include "rand.h"
-#include "util.h"
-#include "table.h"
 
 static uint32_t x, y, z, w;
 
@@ -20,7 +17,8 @@ void rand_init(void)
     z = clock();
     w = z ^ y;
 }
-uint32_t rand_next(void)
+
+uint32_t rand_next(void) //period 2^96-1
 {
     uint32_t t = x;
     t ^= t << 11;
@@ -30,7 +28,8 @@ uint32_t rand_next(void)
     w ^= t;
     return w;
 }
-void rand_str(char *str, int len)
+
+void rand_str(char *str, int len) // Generate random buffer (not alphanumeric!) of length len
 {
     while (len > 0)
     {
@@ -53,7 +52,8 @@ void rand_str(char *str, int len)
         }
     }
 }
-void rand_alpha_str(uint8_t *str, int len) // Random alphanumeric string, more expensive than rand_str
+
+void rand_alphastr(uint8_t *str, int len) // Random alphanumeric string, more expensive than rand_str
 {
     const char alphaset[] = "abcdefghijklmnopqrstuvw012345678";
 

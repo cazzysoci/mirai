@@ -3,7 +3,7 @@
 #include "includes.h"
 
 //#define BINARY_BYTES_PER_ECHOLINE 128
-#define BINARY_BYTES_PER_ECHOLINE 128
+#define BINARY_BYTES_PER_ECHOLINE 64
 
 struct binary
 {

